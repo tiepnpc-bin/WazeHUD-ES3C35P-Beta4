@@ -1,0 +1,57 @@
+name: WazeHUD ES3C35P Firmware
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Host tests
+        shell: bash
+        run: |
+          python3 tests/run_host_tests.py
+      - name: Build firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          idf.py -D IDF_TARGET=esp32s3 -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.hud.defaults' build 2>&1 | tee build-log.txt
+      - name: Collect flash metadata
+        if: success()
+        shell: bash
+        run: |
+          mkdir -p firmware-output
+          test -s build/flasher_args.json
+          cp build/flasher_args.json firmware-output/
+          if [ -f build/flash_args ]; then cp build/flash_args firmware-output/; fi
+          find build -maxdepth 2 -name '*.bin' -exec cp --parents '{}' firmware-output/ \;
+          test -s build/flasher_args.json
+          python3 - <<'PYBIN'
+          from pathlib import Path
+          bins = [p for p in Path("build").glob("*.bin") if p.is_file() and p.stat().st_size > 0]
+          if not bins:
+              raise SystemExit("No nonempty application/merged .bin found")
+          print("Validated BIN files:", [str(p) for p in bins])
+          PYBIN
+          cp build-log.txt firmware-output/
+      - name: Upload firmware and flashing addresses
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WazeHUD-ES3C35P-firmware
+          path: firmware-output/
+      - name: Upload build failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WazeHUD-build-log
+          path: |
+            build-log.txt
+            build/log/**
+          if-no-files-found: warn

@@ -1,0 +1,44 @@
+{
+  "board": "LCDWiki ES3C35P ESP32-S3 N16R8/ST77922/ES8311",
+  "firmware": "2.5.2-hud1 / Beta1",
+  "idf": "6.0.1",
+  "app_bytes": 3329296,
+  "app_partition_bytes": 4128768,
+  "merged_regions": [
+    {
+      "offset": "0x0",
+      "file": "bootloader/bootloader.bin",
+      "bytes": 16464,
+      "matches_merged": true
+    },
+    {
+      "offset": "0x8000",
+      "file": "partition_table/partition-table.bin",
+      "bytes": 3072,
+      "matches_merged": true
+    },
+    {
+      "offset": "0xd000",
+      "file": "ota_data_initial.bin",
+      "bytes": 8192,
+      "matches_merged": true
+    },
+    {
+      "offset": "0x800000",
+      "file": "generated_assets.bin",
+      "bytes": 1484461,
+      "matches_merged": true
+    },
+    {
+      "offset": "0x20000",
+      "file": "xiaozhi.bin",
+      "bytes": 3329296,
+      "matches_merged": true
+    }
+  ],
+  "host_tests": "PASS (ASan+UBSan; leak detection disabled)",
+  "hardware_tested": false,
+  "overspeed_operator": ">=",
+  "wifi_credentials_embedded": false,
+  "upstream_auto_firmware_upgrade": false
+}
