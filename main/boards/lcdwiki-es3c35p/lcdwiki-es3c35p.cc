@@ -45,10 +45,12 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     // mounted with the touch axes already reversed relative to the LCD
     // raster.  At the default landscape rotation an additional horizontal
     // mirror therefore sends a physical top-left tap to the NÓI button at
-    // top-right.  Exchange axes only for that orientation.
+    // top-right.  When the user selects the opposite landscape orientation,
+    // both logical axes must be inverted.  Mirroring only Y left the top
+    // controls mapped into the lower HUD controls.
     const auto set_point = [&] {
         if (rotation == LV_DISPLAY_ROTATION_270) {
-            data->point.x = last_y;
+            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
             data->point.y = DISPLAY_WIDTH - 1 - last_x;
         } else {
             data->point.x = last_y;
@@ -76,12 +78,12 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
                 if ((buf[i * 7] & 0xC0) != 0x40) {
                     int16_t x = ((buf[i * 7] & 0x3F) << 8) | buf[i * 7 + 1];
                     int16_t y = ((buf[i * 7 + 2] & 0x3F) << 8) | buf[i * 7 + 3];
-                    // Ignore jitter < 4px to reduce unwanted scroll on tap
-                    int16_t dx = x - last_x, dy = y - last_y;
-                    if (dx > 3 || dx < -3 || dy > 3 || dy < -3) {
-                        last_x = x;
-                        last_y = y;
-                    }
+                    // A press must always refresh the pointer coordinate.
+                    // Keeping an old point for a small delta makes a later
+                    // tap activate the preceding button, which is far worse
+                    // than a few pixels of capacitive-controller jitter.
+                    last_x = x;
+                    last_y = y;
                     set_point();
                     data->state = LV_INDEV_STATE_PRESSED;
                     const int64_t now_us = esp_timer_get_time();
