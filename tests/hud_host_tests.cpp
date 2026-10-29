@@ -28,6 +28,11 @@ int main(){
  hlp_receiver_feed(&rx,(const uint8_t*)line.data(),line.size());assert(frames==2);
  HlpDecoder dec;HudState decoded;auto* j=cJSON_Parse("{\"ts\":10,\"spd\":60,\"lim\":60,\"dst\":350,\"alr\":2,\"alrD\":500}");
  assert(dec.decodeState(j,decoded));assert(decoded.speedKmh==60 && decoded.maneuverDistanceM==350 && decoded.nearestAlert.distanceM==500);cJSON_Delete(j);
+ // Camera subclasses must not disappear from the voice-warning policy.
+ s.connected=true;s.hasProducerState=true;s.signalStale=false;
+ s.nearestAlert={AlertKind::BusLaneCamera,400,0};s.upcomingAlertCount=0;s.speedKmh=30;s.speedLimitKmh=0;
+ audio::AlertAudioPolicy camera_policy;
+ assert(camera_policy.poll(s,c,100).clip==audio::Clip::SpeedCamera);
  j=cJSON_Parse("{\"ts\":9,\"spd\":1}");assert(!dec.decodeState(j,decoded));assert(decoded.speedKmh==60);cJSON_Delete(j);
  std::cout<<"PASS: >= boundary, offset, unknown/stale, warning cooldown, UTF-8 fragmentation, oversized recovery, HLP distances and ordering\n";
 }

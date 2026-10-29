@@ -56,12 +56,23 @@ const char* AlertName(AlertKind k) {
  case AlertKind::DistanceCamera: return "DO TOC DO TB";
  case AlertKind::PhoneCamera: return "CAMERA DIEN THOAI";
  case AlertKind::SeatbeltCamera: return "CAMERA DAY AN TOAN";
+ case AlertKind::DummyCamera: return "CAMERA PHIA TRUOC";
+ case AlertKind::BusLaneCamera: return "CAMERA LAN XE BUYT";
+ case AlertKind::NoiseCamera: return "CAMERA TIENG ON";
+ case AlertKind::StopSignCamera: return "CAMERA BIEN STOP";
  case AlertKind::NoPassing: return "CAM VUOT";
  case AlertKind::EndNoPassing: return "HET CAM VUOT";
  case AlertKind::SpeedDrop: return "GIAM TOC DO";
  case AlertKind::Railway: return "DUONG SAT";
  case AlertKind::Police: return "CANH SAT";
  case AlertKind::RoadClosed: return "DUONG DONG";
+ case AlertKind::Accident: return "TAI NAN";
+ case AlertKind::TrafficJam: return "KET XE";
+ case AlertKind::Construction: return "CONG TRUONG";
+ case AlertKind::Pothole: return "O GA";
+ case AlertKind::Flood: return "NGAP NUOC";
+ case AlertKind::SlipperyRoad: return "DUONG TRON";
+ case AlertKind::SchoolZone: return "KHU VUC TRUONG HOC";
  case AlertKind::EndSpeedRestriction: return "HET HAN CHE TOC DO";
  default: return "CANH BAO PHIA TRUOC";
  }
@@ -116,6 +127,13 @@ void Tick(lv_timer_t*) {
   // cannot flash through or cover the HUD controls.
   lv_obj_move_foreground(root);
  }
+ // Xiaozhi can re-apply its light theme after network state transitions.
+ // Reassert an opaque black HUD surface on every HUD frame so no light
+ // background leaks through the vehicle display.
+ lv_obj_set_style_bg_color(root,lv_color_black(),0);
+ lv_obj_set_style_bg_opa(root,LV_OPA_COVER,0);
+ lv_obj_set_style_bg_color(panel,lv_color_black(),0);
+ lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);

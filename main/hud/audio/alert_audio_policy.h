@@ -12,6 +12,13 @@ inline Clip clipFor(AlertKind k){
   case AlertKind::DistanceCamera:return Clip::DistanceCamera;
   case AlertKind::PhoneCamera:return Clip::PhoneCamera;
   case AlertKind::SeatbeltCamera:return Clip::SeatbeltCamera;
+  // WazeMod reports these camera subclasses on different roads/regions.
+  // They are all safety cameras and must retain the same bounded warning
+  // policy as an ordinary speed camera instead of silently falling through.
+  case AlertKind::DummyCamera:
+  case AlertKind::BusLaneCamera:
+  case AlertKind::NoiseCamera:
+  case AlertKind::StopSignCamera:return Clip::SpeedCamera;
   case AlertKind::SpeedDrop:return Clip::SpeedDrop;
   case AlertKind::ResidentialStart:return Clip::Residential;
   case AlertKind::NoPassing:return Clip::NoPassing;
