@@ -66,7 +66,13 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
         uint8_t buf[7 * 5];
         if (touch_i2c_read(TOUCH_REG_POINT0, buf, 7 * touch_max_points) == ESP_OK) {
             for (int i = 0; i < touch_max_points; i++) {
-                if (buf[i * 7] & 0x80) {
+                // FT-compatible controllers encode the event in bits 7:6:
+                // 00=press-down, 10=contact and 01=lift-up.  The previous
+                // bit-7-only test rejected every initial press, so LVGL
+                // never received a click unless the controller happened to
+                // emit a later contact frame.  Accept down/contact and only
+                // discard the explicit lift-up event.
+                if ((buf[i * 7] & 0xC0) != 0x40) {
                     int16_t x = ((buf[i * 7] & 0x3F) << 8) | buf[i * 7 + 1];
                     int16_t y = ((buf[i * 7 + 2] & 0x3F) << 8) | buf[i * 7 + 3];
                     // Ignore jitter < 4px to reduce unwanted scroll on tap
