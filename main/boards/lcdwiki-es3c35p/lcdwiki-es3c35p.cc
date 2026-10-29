@@ -39,6 +39,7 @@ static esp_err_t touch_i2c_read(uint16_t reg, uint8_t* data, size_t len) {
 
 static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
+    static int64_t last_touch_log_us = 0;
     const auto rotation = lv_display_get_rotation(lv_display_get_default());
     // The touch IC reports its native 320x480 coordinates.  LVGL's software
     // rotation does not transform pointer input, so apply the matching 90/270
@@ -76,6 +77,12 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
                     }
                     set_point();
                     data->state = LV_INDEV_STATE_PRESSED;
+                    const int64_t now_us = esp_timer_get_time();
+                    if (now_us - last_touch_log_us >= 500000) {
+                        ESP_LOGI(TAG, "Touch raw=(%d,%d) logical=(%d,%d) rotation=%d", x, y,
+                                 data->point.x, data->point.y, static_cast<int>(rotation));
+                        last_touch_log_us = now_us;
+                    }
                     break;
                 }
             }

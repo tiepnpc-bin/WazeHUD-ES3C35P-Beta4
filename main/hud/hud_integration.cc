@@ -109,7 +109,13 @@ void Tick(lv_timer_t*) {
  // a constant flicker and also interrupts touch input.  The HUD/AI button is
  // now the only path that can intentionally hide this surface.
  if(!showing_hud)lv_obj_add_flag(root,LV_OBJ_FLAG_HIDDEN);
- else lv_obj_remove_flag(root,LV_OBJ_FLAG_HIDDEN);
+ else {
+  lv_obj_remove_flag(root,LV_OBJ_FLAG_HIDDEN);
+  // Xiaozhi may create its status widgets after the HUD during a Wi-Fi retry.
+  // Keep the opaque HUD surface above those widgets so the light base screen
+  // cannot flash through or cover the HUD controls.
+  lv_obj_move_foreground(root);
+ }
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
