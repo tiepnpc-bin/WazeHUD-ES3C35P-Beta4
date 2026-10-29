@@ -9,6 +9,7 @@
 #include "board.h"
 #include "settings.h"
 #include "display.h"
+#include "display/lvgl_display/lvgl_theme.h"
 #include "lvgl_font.h"
 #include "assets/lang_config.h"
 #include <esp_lvgl_port.h>
@@ -114,26 +115,16 @@ void Tick(lv_timer_t*) {
  auto s=HudStateStore::instance().snapshot();auto cfg=DeviceConfig::instance().snapshot();
  cfg.audioMode=static_cast<AudioMode>(sound_mode.load());
  const bool valid=Valid(s);char tmp[192],d[24];
- // Keep the complete HUD visible while Xiaozhi changes connection states.
- // Hiding it during startup/configuration made the UI alternate between the
- // HUD and Xiaozhi screen when Wi-Fi retried authentication, which appears as
- // a constant flicker and also interrupts touch input.  The HUD/AI button is
- // now the only path that can intentionally hide this surface.
- if(!showing_hud)lv_obj_add_flag(root,LV_OBJ_FLAG_HIDDEN);
- else {
-  lv_obj_remove_flag(root,LV_OBJ_FLAG_HIDDEN);
-  // Xiaozhi may create its status widgets after the HUD during a Wi-Fi retry.
-  // Keep the opaque HUD surface above those widgets so the light base screen
-  // cannot flash through or cover the HUD controls.
-  lv_obj_move_foreground(root);
+ // The HUD resides in LVGL's top layer, so it is already above the Xiaozhi
+ // widgets.  Reordering it and rewriting full-screen styles every 250 ms
+ // invalidated the complete QSPI framebuffer and was visible as flashing on
+ // the ST77922.  Change visibility only when the user actually toggles mode.
+ static bool applied_showing_hud = true;
+ if (applied_showing_hud != showing_hud) {
+  if (showing_hud) lv_obj_remove_flag(root, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(root, LV_OBJ_FLAG_HIDDEN);
+  applied_showing_hud = showing_hud;
  }
- // Xiaozhi can re-apply its light theme after network state transitions.
- // Reassert an opaque black HUD surface on every HUD frame so no light
- // background leaks through the vehicle display.
- lv_obj_set_style_bg_color(root,lv_color_black(),0);
- lv_obj_set_style_bg_opa(root,LV_OPA_COVER,0);
- lv_obj_set_style_bg_color(panel,lv_color_black(),0);
- lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
@@ -203,7 +194,15 @@ esp_err_t StartHud() {
  ESP_RETURN_ON_ERROR(HlpProtocol::instance().start(),"HUD","Protocol init");
  ESP_RETURN_ON_ERROR(BleTransport::instance().init(),"HUD","BLE init");
  Settings settings("hud_audio");sound_mode.store(std::clamp<int>(settings.GetInt("mode",2),0,2));
+ // Keep the native Xiaozhi screen dark as well.  The HUD itself is an opaque
+ // black top-layer surface, but selecting the dark theme removes white frames
+ // during an intentional HUD/AI mode switch.
+ if (auto* dark_theme = LvglThemeManager::GetInstance().GetTheme("dark"); dark_theme != nullptr) {
+  Board::GetInstance().GetDisplay()->SetTheme(dark_theme);
+ }
  if(!lvgl_port_lock(1000))return ESP_ERR_TIMEOUT;
+ lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
+ lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, 0);
  auto* layer=lv_layer_top();
  root=lv_obj_create(layer);lv_obj_remove_style_all(root);lv_obj_set_pos(root,0,0);lv_obj_set_size(root,480,320);
  lv_obj_set_style_bg_color(root,lv_color_black(),0);lv_obj_set_style_bg_opa(root,LV_OPA_COVER,0);
