@@ -63,6 +63,12 @@ public:
     void Initialize();
 
     /**
+     * Start the board network after optional peripherals that require
+     * contiguous internal SRAM (the WazeHUD BLE controller) are initialized.
+     */
+    void StartNetwork();
+
+    /**
      * Run the main event loop
      * This function runs in the main task and never returns.
      * It handles all events including network, state changes, and user interactions.

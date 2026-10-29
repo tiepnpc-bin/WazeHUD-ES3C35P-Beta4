@@ -38,9 +38,15 @@ static esp_err_t touch_i2c_read(uint16_t reg, uint8_t* data, size_t len) {
 
 static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
-    const bool flipped = lv_display_get_rotation(lv_display_get_default()) == LV_DISPLAY_ROTATION_270;
-    data->point.x = flipped ? DISPLAY_HEIGHT - 1 - last_y : last_y;
-    data->point.y = flipped ? last_x : DISPLAY_WIDTH - 1 - last_x;
+    const bool rotated_270 =
+        lv_display_get_rotation(lv_display_get_default()) == LV_DISPLAY_ROTATION_270;
+    // The touch controller and native ST77922 both use 320x480 axes.  For
+    // the normal landscape (90 degree) view, simply exchange its axes.  The
+    // alternate 270 degree view mirrors both logical axes.  Mirroring Y in
+    // the normal view put every tap on the opposite vertical edge, making
+    // the HUD / AI and audio buttons appear unresponsive.
+    data->point.x = rotated_270 ? DISPLAY_HEIGHT - 1 - last_y : last_y;
+    data->point.y = rotated_270 ? DISPLAY_WIDTH - 1 - last_x : last_x;
     data->state = LV_INDEV_STATE_RELEASED;
 
     if (touch_dev_handle == NULL)
@@ -61,8 +67,8 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
                         last_x = x;
                         last_y = y;
                     }
-                    data->point.x = flipped ? DISPLAY_HEIGHT - 1 - last_y : last_y;
-                    data->point.y = flipped ? last_x : DISPLAY_WIDTH - 1 - last_x;
+                    data->point.x = rotated_270 ? DISPLAY_HEIGHT - 1 - last_y : last_y;
+                    data->point.y = rotated_270 ? DISPLAY_WIDTH - 1 - last_x : last_x;
                     data->state = LV_INDEV_STATE_PRESSED;
                     break;
                 }

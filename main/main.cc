@@ -35,5 +35,8 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "WazeHUD start failed: %s; continuing without HUD", esp_err_to_name(ret));
     }
 #endif
+    // Wi-Fi allocates several internal-SRAM pools.  It must start only after
+    // the BLE controller has reserved its contiguous memory.
+    app.StartNetwork();
     app.Run();  // This function runs the main event loop and never returns
 }

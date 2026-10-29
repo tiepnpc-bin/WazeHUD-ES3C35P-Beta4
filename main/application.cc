@@ -173,11 +173,14 @@ void Application::Initialize() {
         }
     });
 
-    // Start network asynchronously
-    board.StartNetwork();
+}
 
-    // Update the status bar immediately to show the network state
-    display->UpdateStatusBar(true);
+void Application::StartNetwork() {
+    auto& board = Board::GetInstance();
+    // The BLE controller needs a contiguous internal-SRAM allocation.  Start
+    // it before Wi-Fi reserves its RX/TX pools, then bring the network up.
+    board.StartNetwork();
+    board.GetDisplay()->UpdateStatusBar(true);
 }
 
 void Application::Run() {
