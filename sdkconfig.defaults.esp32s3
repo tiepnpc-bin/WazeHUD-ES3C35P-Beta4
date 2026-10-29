@@ -10,10 +10,11 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024
 # left no allocatable internal block for the BLE controller after Wi-Fi AP
 # startup.  64 KiB still covers the 51 KiB LCD DMA buffer plus audio DMA.
 # BLE is initialized before Wi-Fi and therefore receives its contiguous
-# controller allocation first.  48 KiB remains sufficient for DMA-only
-# clients while leaving the Wi-Fi driver enough internal SRAM for all RX
-# buffers (64 KiB left it one buffer short on the ESP32-S3 N16R8).
-CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=49152
+# controller allocation first.  Keep only the DMA working set internal so
+# generic allocations move to PSRAM before the Wi-Fi driver reserves its RX
+# buffers.  48 KiB still left the third 1.6 KiB RX buffer unavailable on this
+# ESP32-S3 N16R8; 32 KiB provides both controllers their required space.
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
 CONFIG_SPIRAM_MEMTEST=n
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 
