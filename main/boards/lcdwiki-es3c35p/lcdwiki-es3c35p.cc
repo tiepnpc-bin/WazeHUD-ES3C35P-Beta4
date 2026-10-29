@@ -5,6 +5,7 @@
 #include "display/lcd_display.h"
 #include "led/single_led.h"
 #include "mcp_server.h"
+#include "settings.h"
 #include "wifi_board.h"
 
 #include <driver/i2c_master.h>
@@ -38,15 +39,21 @@ static esp_err_t touch_i2c_read(uint16_t reg, uint8_t* data, size_t len) {
 
 static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
-    const bool rotated_270 =
-        lv_display_get_rotation(lv_display_get_default()) == LV_DISPLAY_ROTATION_270;
-    // The touch controller and native ST77922 both use 320x480 axes.  For
-    // the normal landscape (90 degree) view, simply exchange its axes.  The
-    // alternate 270 degree view mirrors both logical axes.  Mirroring Y in
-    // the normal view put every tap on the opposite vertical edge, making
-    // the HUD / AI and audio buttons appear unresponsive.
-    data->point.x = rotated_270 ? DISPLAY_HEIGHT - 1 - last_y : last_y;
-    data->point.y = rotated_270 ? DISPLAY_WIDTH - 1 - last_x : last_x;
+    const auto rotation = lv_display_get_rotation(lv_display_get_default());
+    // The touch IC reports its native 320x480 coordinates.  LVGL's software
+    // rotation does not transform pointer input, so apply the matching 90/270
+    // degree affine transform here.  A mere X/Y exchange made the visible
+    // landscape UI correct but put every touch on the wrong half of the HUD.
+    const auto set_point = [&] {
+        if (rotation == LV_DISPLAY_ROTATION_270) {
+            data->point.x = last_y;
+            data->point.y = DISPLAY_WIDTH - 1 - last_x;
+        } else {
+            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
+            data->point.y = last_x;
+        }
+    };
+    set_point();
     data->state = LV_INDEV_STATE_RELEASED;
 
     if (touch_dev_handle == NULL)
@@ -67,8 +74,7 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
                         last_x = x;
                         last_y = y;
                     }
-                    data->point.x = rotated_270 ? DISPLAY_HEIGHT - 1 - last_y : last_y;
-                    data->point.y = rotated_270 ? DISPLAY_WIDTH - 1 - last_x : last_x;
+                    set_point();
                     data->state = LV_INDEV_STATE_PRESSED;
                     break;
                 }
@@ -301,6 +307,10 @@ private:
         ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y));
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
+        // This device is a vehicle HUD; its base Xiaozhi UI must use the
+        // same dark theme as the HUD layer instead of the generic light UI.
+        Settings display_settings("display", true);
+        display_settings.SetString("theme", "dark");
         display_ = new ST77922_Display(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT,
                                        DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X,
                                        DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
