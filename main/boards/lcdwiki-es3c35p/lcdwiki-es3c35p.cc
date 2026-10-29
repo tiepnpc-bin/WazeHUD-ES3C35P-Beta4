@@ -41,16 +41,17 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
     static int64_t last_touch_log_us = 0;
     const auto rotation = lv_display_get_rotation(lv_display_get_default());
-    // The touch IC reports its native 320x480 coordinates.  LVGL's software
-    // rotation does not transform pointer input, so apply the matching 90/270
-    // degree affine transform here.  A mere X/Y exchange made the visible
-    // landscape UI correct but put every touch on the wrong half of the HUD.
+    // The touch IC reports its native 320x480 coordinates.  This panel is
+    // mounted with the touch axes already reversed relative to the LCD
+    // raster.  At the default landscape rotation an additional horizontal
+    // mirror therefore sends a physical top-left tap to the NÓI button at
+    // top-right.  Exchange axes only for that orientation.
     const auto set_point = [&] {
         if (rotation == LV_DISPLAY_ROTATION_270) {
             data->point.x = last_y;
             data->point.y = DISPLAY_WIDTH - 1 - last_x;
         } else {
-            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
+            data->point.x = last_y;
             data->point.y = last_x;
         }
     };
