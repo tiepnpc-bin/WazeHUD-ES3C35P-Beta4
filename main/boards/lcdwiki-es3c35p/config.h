@@ -40,12 +40,15 @@
 #define DISPLAY_MIRROR_Y        false
 #define DISPLAY_SWAP_XY         false
 #define DISPLAY_RGB_ORDER       LCD_RGB_ELEMENT_ORDER_BGR
-#define DISPLAY_INVERT_COLOR    false
+#define DISPLAY_INVERT_COLOR    true
 
 #define DISPLAY_OFFSET_X        0
 #define DISPLAY_OFFSET_Y        0
 
-#define DISPLAY_BUFFER_LINES    80
+// Software rotation needs a separate rotated draw buffer.  Keep the transfer
+// chunk small and place the draw buffers in PSRAM; this avoids corrupting the
+// QSPI frame while Wi-Fi/BLE consume internal SRAM.
+#define DISPLAY_BUFFER_LINES    40
 #define DISPLAY_BUFFER_SIZE     (DISPLAY_WIDTH * DISPLAY_BUFFER_LINES)
 
 #define TOUCH_RST_PIN           GPIO_NUM_48

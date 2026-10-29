@@ -183,7 +183,10 @@ private:
             .control_handle = nullptr,
             .buffer_size = static_cast<uint32_t>(DISPLAY_BUFFER_SIZE),
             .double_buffer = false,
-            .trans_size = 0,
+            // The ST77922 cannot rotate in hardware.  esp_lvgl_port therefore
+            // keeps its draw/rotation buffers in PSRAM and copies each flush
+            // through this DMA-capable SRAM transfer buffer.
+            .trans_size = static_cast<uint32_t>(DISPLAY_BUFFER_SIZE),
             .hres = static_cast<uint32_t>(DISPLAY_WIDTH),
             .vres = static_cast<uint32_t>(DISPLAY_HEIGHT),
             .monochrome = false,
@@ -196,8 +199,8 @@ private:
             .color_format = LV_COLOR_FORMAT_RGB565,
             .flags =
                 {
-                    .buff_dma = 1,
-                    .buff_spiram = 0,
+                    .buff_dma = 0,
+                    .buff_spiram = 1,
                     .sw_rotate = 1,
                     .swap_bytes = 1,
                     .full_refresh = 0,
@@ -266,8 +269,12 @@ private:
         io_config.cs_gpio_num = DISPLAY_CS_PIN;
         io_config.dc_gpio_num = GPIO_NUM_NC;
         io_config.spi_mode = 0;
-        io_config.pclk_hz = 80 * 1000 * 1000;
-        io_config.trans_queue_depth = 10;
+        // This board's QSPI routing is qualified at 40 MHz.  At 80 MHz it
+        // intermittently corrupts full-width RGB565 transfers.
+        io_config.pclk_hz = 40 * 1000 * 1000;
+        // One in-flight flush prevents a later LVGL rotation buffer from
+        // being reused while the SPI DMA engine still reads it.
+        io_config.trans_queue_depth = 1;
         io_config.lcd_cmd_bits = 32;
         io_config.lcd_param_bits = 8;
         io_config.flags.quad_mode = true;
