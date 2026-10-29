@@ -23,7 +23,7 @@
 
 namespace waze_hud {
 namespace {
-lv_obj_t *panel, *speed, *limit, *turn, *second_turn, *distance, *eta, *alert, *street, *link, *mini,
+lv_obj_t *root, *panel, *speed, *limit, *speed_sign, *turn, *second_turn, *distance, *eta, *alert, *street, *link, *mini,
     *mode_label, *lanes;
 std::atomic<int> sound_mode{2};
 bool showing_hud = true;
@@ -89,11 +89,7 @@ void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t 
  lv_obj_add_event_cb(btn,cb,LV_EVENT_CLICKED,nullptr);
  auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_center(text);
 }
-void Toggle(lv_event_t*) {
- showing_hud=!showing_hud;
- if(showing_hud)lv_obj_remove_flag(panel,LV_OBJ_FLAG_HIDDEN);
- else lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
-}
+void Toggle(lv_event_t*) { showing_hud=!showing_hud; }
 void Rotate(lv_event_t*) { DeviceConfig::instance().toggleRotation(); }
 void Talk(lv_event_t*) {
  if(Now()<next_sound)return;
@@ -109,8 +105,12 @@ void Tick(lv_timer_t*) {
  const bool valid=Valid(s);char tmp[192],d[24];
  const auto app_state=Application::GetInstance().GetDeviceState();
  const bool setup=app_state==kDeviceStateStarting || app_state==kDeviceStateWifiConfiguring || app_state==kDeviceStateActivating;
- if((setup && !valid) || !showing_hud)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
- else lv_obj_remove_flag(panel,LV_OBJ_FLAG_HIDDEN);
+ // Keep the complete HUD in a single top-level surface.  Previously only the
+ // data panel was hidden, leaving the base Xiaozhi UI and its theme visible
+ // underneath; that produced the white background and mixed widgets seen on
+ // the real board.
+ if((setup && !valid) || !showing_hud)lv_obj_add_flag(root,LV_OBJ_FLAG_HIDDEN);
+ else lv_obj_remove_flag(root,LV_OBJ_FLAG_HIDDEN);
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
@@ -122,7 +122,15 @@ void Tick(lv_timer_t*) {
  SetLabel(link,!s.connected?"BLE: CHUA KET NOI":!valid?"BLE: CHO DU LIEU":"BLE: WAZEMOD");
  if(valid) {
   std::snprintf(tmp,sizeof(tmp),"%d",s.speedKmh);SetLabel(speed,tmp);
-  if(s.speedLimitKmh>0)std::snprintf(tmp,sizeof(tmp),"%d",s.speedLimitKmh);else std::snprintf(tmp,sizeof(tmp),"?");
+  if(s.speedLimitKmh>0) {
+   std::snprintf(tmp,sizeof(tmp),"%d",s.speedLimitKmh);
+   lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);
+  } else {
+   tmp[0]='\0';
+   // Do not draw a non-standard teal/question-mark sign when Waze has not
+   // supplied a speed limit yet.
+   lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);
+  }
   SetLabel(limit,tmp);
   lv_obj_set_style_text_color(speed,lv_color_hex((s.speedLimitKmh>0 && s.speedKmh>s.speedLimitKmh)?0xff3030:0xffffff),0);
   SetLabel(turn,s.navigationActive?TurnName(s.maneuver):"CHUA DAN DUONG");
@@ -146,7 +154,7 @@ void Tick(lv_timer_t*) {
   SetLabel(lanes,lane_text);
   std::snprintf(tmp,sizeof(tmp),"%d km/h | %s",s.speedKmh,overspeedActive(s,cfg)?"CANH BAO":"WazeMod");
  } else {
-  SetLabel(speed,"--");SetLabel(limit,"?");SetLabel(turn,"CHO WAZEMOD");
+  SetLabel(speed,"--");SetLabel(limit,"");lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);SetLabel(turn,"CHO WAZEMOD");
   SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
   std::snprintf(tmp,sizeof(tmp),"HUD: CHUA CO DU LIEU");
  }
@@ -174,18 +182,23 @@ esp_err_t StartHud() {
  Settings settings("hud_audio");sound_mode.store(std::clamp<int>(settings.GetInt("mode",2),0,2));
  if(!lvgl_port_lock(1000))return ESP_ERR_TIMEOUT;
  auto* layer=lv_layer_top();
- panel=lv_obj_create(layer);lv_obj_set_pos(panel,0,44);lv_obj_set_size(panel,480,276);
+ root=lv_obj_create(layer);lv_obj_remove_style_all(root);lv_obj_set_pos(root,0,0);lv_obj_set_size(root,480,320);
+ lv_obj_set_style_bg_color(root,lv_color_black(),0);lv_obj_set_style_bg_opa(root,LV_OPA_COVER,0);
+ lv_obj_set_style_border_width(root,0,0);lv_obj_set_style_pad_all(root,0,0);lv_obj_remove_flag(root,LV_OBJ_FLAG_SCROLLABLE);
+ panel=lv_obj_create(root);lv_obj_remove_style_all(panel);lv_obj_set_pos(panel,0,44);lv_obj_set_size(panel,480,276);
  lv_obj_set_style_bg_color(panel,lv_color_black(),0);lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
  lv_obj_set_style_border_width(panel,0,0);lv_obj_set_style_radius(panel,0,0);lv_obj_set_style_pad_all(panel,0,0);
  lv_obj_remove_flag(panel,LV_OBJ_FLAG_SCROLLABLE);
  link=Label(panel,12,4,330,&lv_font_montserrat_20);
  speed=Label(panel,20,42,180,&lv_font_montserrat_48);
  auto* unit=Label(panel,24,102,150,&lv_font_montserrat_20);SetLabel(unit,"km/h");
- auto* sign=lv_obj_create(panel);lv_obj_set_pos(sign,174,24);lv_obj_set_size(sign,156,156);
- lv_obj_set_style_radius(sign,LV_RADIUS_CIRCLE,0);lv_obj_set_style_bg_color(sign,lv_color_white(),0);
- lv_obj_set_style_bg_opa(sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(sign,lv_color_hex(0xf02222),0);
- lv_obj_set_style_border_width(sign,10,0);lv_obj_set_style_pad_all(sign,0,0);lv_obj_remove_flag(sign,LV_OBJ_FLAG_SCROLLABLE);
- limit=Label(sign,0,48,156,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
+ speed_sign=lv_obj_create(panel);lv_obj_remove_style_all(speed_sign);lv_obj_set_pos(speed_sign,174,24);lv_obj_set_size(speed_sign,156,156);
+ // International/Vietnamese maximum-speed sign: white face, red circular
+ // border and black numeral.  Local styles keep it independent of AI theme.
+ lv_obj_set_style_radius(speed_sign,LV_RADIUS_CIRCLE,0);lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
+ lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,lv_color_hex(0xE02020),0);
+ lv_obj_set_style_border_width(speed_sign,10,0);lv_obj_set_style_pad_all(speed_sign,0,0);lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_SCROLLABLE);
+ limit=Label(speed_sign,0,48,156,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
  turn=Label(panel,341,40,130,&lv_font_montserrat_20);distance=Label(panel,341,75,130,&lv_font_montserrat_24);
  second_turn=Label(panel,341,108,130,&lv_font_montserrat_20);eta=Label(panel,341,132,130,&lv_font_montserrat_20);
  alert=Label(panel,12,164,455,&lv_font_montserrat_20);lv_obj_set_style_text_color(alert,lv_color_hex(0xffc040),0);
@@ -194,8 +207,8 @@ esp_err_t StartHud() {
  if(theme && theme->GetTextFont())lv_obj_set_style_text_font(street,theme->GetTextFont()->font(),0);
  lanes=Label(panel,12,212,455,&lv_font_montserrat_20);
  mode_label=Label(panel,12,240,150,&lv_font_montserrat_20);
- mini=Label(layer,8,5,265,&lv_font_montserrat_20);
- Button(layer,"HUD / AI",280,0,100,Toggle);Button(layer,"NOI",390,0,80,Talk);
+ mini=Label(root,8,5,265,&lv_font_montserrat_20);
+ Button(root,"HUD / AI",280,0,100,Toggle);Button(root,"NOI",390,0,80,Talk);
  Button(panel,"XOAY",180,233,110,Rotate);
  Button(panel,"AM THANH",305,233,155,Sound);
  lv_timer_create(Tick,250,nullptr);
