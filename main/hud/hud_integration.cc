@@ -103,13 +103,12 @@ void Tick(lv_timer_t*) {
  auto s=HudStateStore::instance().snapshot();auto cfg=DeviceConfig::instance().snapshot();
  cfg.audioMode=static_cast<AudioMode>(sound_mode.load());
  const bool valid=Valid(s);char tmp[192],d[24];
- const auto app_state=Application::GetInstance().GetDeviceState();
- const bool setup=app_state==kDeviceStateStarting || app_state==kDeviceStateWifiConfiguring || app_state==kDeviceStateActivating;
- // Keep the complete HUD in a single top-level surface.  Previously only the
- // data panel was hidden, leaving the base Xiaozhi UI and its theme visible
- // underneath; that produced the white background and mixed widgets seen on
- // the real board.
- if((setup && !valid) || !showing_hud)lv_obj_add_flag(root,LV_OBJ_FLAG_HIDDEN);
+ // Keep the complete HUD visible while Xiaozhi changes connection states.
+ // Hiding it during startup/configuration made the UI alternate between the
+ // HUD and Xiaozhi screen when Wi-Fi retried authentication, which appears as
+ // a constant flicker and also interrupts touch input.  The HUD/AI button is
+ // now the only path that can intentionally hide this surface.
+ if(!showing_hud)lv_obj_add_flag(root,LV_OBJ_FLAG_HIDDEN);
  else lv_obj_remove_flag(root,LV_OBJ_FLAG_HIDDEN);
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
