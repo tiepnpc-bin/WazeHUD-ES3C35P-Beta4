@@ -38,8 +38,9 @@ static esp_err_t touch_i2c_read(uint16_t reg, uint8_t* data, size_t len) {
 
 static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
-    data->point.x = last_x;
-    data->point.y = last_y;
+    const bool flipped = lv_display_get_rotation(lv_display_get_default()) == LV_DISPLAY_ROTATION_270;
+    data->point.x = flipped ? DISPLAY_HEIGHT - 1 - last_y : last_y;
+    data->point.y = flipped ? last_x : DISPLAY_WIDTH - 1 - last_x;
     data->state = LV_INDEV_STATE_RELEASED;
 
     if (touch_dev_handle == NULL)
@@ -60,8 +61,8 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
                         last_x = x;
                         last_y = y;
                     }
-                    data->point.x = last_x;
-                    data->point.y = last_y;
+                    data->point.x = flipped ? DISPLAY_HEIGHT - 1 - last_y : last_y;
+                    data->point.y = flipped ? last_x : DISPLAY_WIDTH - 1 - last_x;
                     data->state = LV_INDEV_STATE_PRESSED;
                     break;
                 }
@@ -158,11 +159,13 @@ static const st77922_lcd_init_cmd_t lcd_init_cmds[] = {
     {0x35, (uint8_t[]){0x01}, 1, 20},
 };
 
-// ---- Display class with ST77922 4-pixel alignment ----
+// With software rotation, logical Y maps to the ST77922's physical X axis.
+// That physical X window must be four-pixel aligned; aligning logical X here
+// would instead corrupt rotated partial updates.
 static void st77922_rounder_cb(lv_event_t* e) {
     lv_area_t* area = (lv_area_t*)lv_event_get_param(e);
-    area->x1 = (area->x1 >> 2) << 2;
-    area->x2 = ((area->x2 >> 2) << 2) + 3;
+    area->y1 = (area->y1 >> 2) << 2;
+    area->y2 = ((area->y2 >> 2) << 2) + 3;
 }
 
 class ST77922_Display : public LcdDisplay {
@@ -197,7 +200,7 @@ private:
                 {
                     .buff_dma = 1,
                     .buff_spiram = 0,
-                    .sw_rotate = 0,
+                    .sw_rotate = 1,
                     .swap_bytes = 1,
                     .full_refresh = 0,
                     .direct_mode = 0,
@@ -205,6 +208,9 @@ private:
         };
         display_ = lvgl_port_add_disp(&display_cfg);
         if (display_ != nullptr) {
+            // ST77922 has no hardware row/column exchange.  LVGL rotates
+            // once in software; do not ask the panel driver to swap axes.
+            lv_display_set_rotation(display_, LV_DISPLAY_ROTATION_90);
             lv_display_add_event_cb(display_, st77922_rounder_cb, LV_EVENT_INVALIDATE_AREA,
                                     nullptr);
         }

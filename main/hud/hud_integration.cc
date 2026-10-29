@@ -111,6 +111,11 @@ void Tick(lv_timer_t*) {
  const bool setup=app_state==kDeviceStateStarting || app_state==kDeviceStateWifiConfiguring || app_state==kDeviceStateActivating;
  if((setup && !valid) || !showing_hud)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
  else lv_obj_remove_flag(panel,LV_OBJ_FLAG_HIDDEN);
+  static int applied_rotation=-1;
+  if(applied_rotation!=int(cfg.rotateDisplay)){
+   lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
+   applied_rotation=int(cfg.rotateDisplay);
+  }
  static int applied_brightness=-1;
  if(applied_brightness!=cfg.brightness){Board::GetInstance().GetBacklight()->SetBrightness(cfg.brightness,false);applied_brightness=cfg.brightness;}
 
