@@ -27,7 +27,13 @@ extern "C" void app_main(void)
     auto& app = Application::GetInstance();
     app.Initialize();
 #if CONFIG_WAZE_HUD_AI
-    ESP_ERROR_CHECK(waze_hud::StartHud());
+    // HUD/BLE is optional relative to the base device.  Keep the display and
+    // recovery UI alive if a future configuration or memory regression makes
+    // the HUD unavailable instead of aborting and rebooting forever.
+    ret = waze_hud::StartHud();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "WazeHUD start failed: %s; continuing without HUD", esp_err_to_name(ret));
+    }
 #endif
     app.Run();  // This function runs the main event loop and never returns
 }

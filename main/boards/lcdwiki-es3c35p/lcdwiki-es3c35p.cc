@@ -164,8 +164,6 @@ static void st77922_rounder_cb(lv_event_t* e) {
     lv_area_t* area = (lv_area_t*)lv_event_get_param(e);
     area->x1 = (area->x1 >> 2) << 2;
     area->x2 = ((area->x2 >> 2) << 2) + 3;
-    area->y1 = (area->y1 >> 2) << 2;
-    area->y2 = ((area->y2 >> 2) << 2) + 3;
 }
 
 class ST77922_Display : public LcdDisplay {
