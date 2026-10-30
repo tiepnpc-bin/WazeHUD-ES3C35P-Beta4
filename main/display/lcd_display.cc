@@ -1377,6 +1377,36 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // Update low battery popup
     lv_obj_set_style_bg_color(low_battery_popup_, lvgl_theme->low_battery_color(), 0);
 
+#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
+    // The generated Xiaozhi asset pack may contain a "dark" skin whose
+    // background is still bright.  That is fine for a chat appliance, but is
+    // unsafe in a vehicle and was also the source of the persistent white
+    // frame behind the HUD.  This board has one fixed, unambiguous base
+    // palette: opaque black surfaces with white foreground text.  Apply it
+    // *after* asset/theme processing so an asset refresh cannot undo it.
+    lv_obj_set_style_bg_image_src(screen, nullptr, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(screen, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(screen, lv_color_white(), LV_PART_MAIN);
+    if (container_ != nullptr) {
+        lv_obj_set_style_bg_image_src(container_, nullptr, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(container_, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, LV_PART_MAIN);
+    }
+    if (content_ != nullptr) {
+        lv_obj_set_style_bg_color(content_, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(content_, LV_OPA_COVER, LV_PART_MAIN);
+    }
+    if (top_bar_ != nullptr) {
+        lv_obj_set_style_bg_color(top_bar_, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(top_bar_, LV_OPA_COVER, LV_PART_MAIN);
+    }
+    if (bottom_bar_ != nullptr) {
+        lv_obj_set_style_bg_color(bottom_bar_, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(bottom_bar_, LV_OPA_COVER, LV_PART_MAIN);
+    }
+#endif
+
     // No errors occurred. Save theme to settings
     Display::SetTheme(lvgl_theme);
 }

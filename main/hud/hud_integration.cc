@@ -28,7 +28,7 @@
 namespace waze_hud {
 namespace {
 lv_obj_t *root, *panel, *speed, *limit, *speed_sign, *turn, *second_turn, *distance, *eta, *alert, *street, *link, *mini,
-    *mode_label, *lanes, *alert_card;
+    *mode_label, *lanes, *alert_card, *nav_arrow;
 std::atomic<int> sound_mode{2};
 bool showing_hud = true;
 audio::AlertAudioPolicy policy;
@@ -50,6 +50,18 @@ const char* TurnName(Maneuver m) {
  case Maneuver::ExitRight: return "LOI RA PHAI";
  case Maneuver::Arrive: return "DEN NOI";
  default: return "DI THANG";
+ }
+}
+const char* TurnArrow(Maneuver m) {
+ switch(m) {
+ case Maneuver::Left: case Maneuver::SlightLeft: case Maneuver::SharpLeft:
+ case Maneuver::KeepLeft: case Maneuver::ExitLeft: return "<";
+ case Maneuver::Right: case Maneuver::SlightRight: case Maneuver::SharpRight:
+ case Maneuver::KeepRight: case Maneuver::ExitRight: return ">";
+ case Maneuver::UTurn: return "U";
+ case Maneuver::Roundabout: case Maneuver::RoundaboutLeft:
+ case Maneuver::RoundaboutRight: return "O";
+ default: return "^";
  }
 }
 const char* AlertName(AlertKind k) {
@@ -210,6 +222,7 @@ void Tick(lv_timer_t*) {
   SetLabel(limit,tmp);
   lv_obj_set_style_text_color(speed,lv_color_hex((s.speedLimitKmh>0 && s.speedKmh>s.speedLimitKmh)?0xff3030:0xffffff),0);
   SetLabel(turn,s.navigationActive?TurnName(s.maneuver):"CHUA DAN DUONG");
+  SetLabel(nav_arrow,s.navigationActive?TurnArrow(s.maneuver):"");
   SetLabel(second_turn, s.navigationActive && s.secondManeuver != Maneuver::None
                             ? TurnName(s.secondManeuver) : "");
   FormatDistance(s.maneuverDistanceM,d,sizeof(d));SetLabel(distance,s.navigationActive?d:"");
@@ -234,7 +247,7 @@ void Tick(lv_timer_t*) {
   std::snprintf(tmp,sizeof(tmp),"%d km/h | %s",s.speedKmh,overspeedActive(s,cfg)?"CANH BAO":"WazeMod");
  } else {
   SetLabel(speed,"--");SetLabel(limit,"");lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);SetLabel(turn,"CHO WAZEMOD");
-  SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
+  SetLabel(nav_arrow,"");SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
   lv_obj_set_style_text_color(alert,lv_color_white(),0);
   lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   std::snprintf(tmp,sizeof(tmp),"HUD: CHUA CO DU LIEU");
@@ -299,14 +312,15 @@ esp_err_t StartHud() {
  limit=Label(speed_sign,0,29,112,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
  auto* divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,148,8);lv_obj_set_size(divider,2,246);
  lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
- turn=Label(panel,162,24,172,&lv_font_montserrat_24);lv_obj_set_style_text_align(turn,LV_TEXT_ALIGN_CENTER,0);
- distance=Label(panel,162,61,172,&lv_font_montserrat_48);lv_obj_set_style_text_align(distance,LV_TEXT_ALIGN_CENTER,0);
- second_turn=Label(panel,162,115,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(second_turn,LV_TEXT_ALIGN_CENTER,0);
- eta=Label(panel,162,140,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(eta,LV_TEXT_ALIGN_CENTER,0);
- street=Label(panel,158,168,180,&lv_font_montserrat_20);lv_obj_set_style_text_align(street,LV_TEXT_ALIGN_CENTER,0);
+ nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,lv_color_hex(0x249bff),0);
+ turn=Label(panel,162,55,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(turn,LV_TEXT_ALIGN_CENTER,0);
+ distance=Label(panel,162,80,172,&lv_font_montserrat_48);lv_obj_set_style_text_align(distance,LV_TEXT_ALIGN_CENTER,0);
+ second_turn=Label(panel,162,134,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(second_turn,LV_TEXT_ALIGN_CENTER,0);
+ eta=Label(panel,162,158,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(eta,LV_TEXT_ALIGN_CENTER,0);
+ street=Label(panel,158,184,180,&lv_font_montserrat_20);lv_obj_set_style_text_align(street,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(street,LV_LABEL_LONG_SCROLL_CIRCULAR);
  auto theme=Board::GetInstance().GetDisplay()->GetTheme();
  if(theme && theme->GetTextFont())lv_obj_set_style_text_font(street,theme->GetTextFont()->font(),0);
- lanes=Label(panel,158,204,180,&lv_font_montserrat_20);lv_obj_set_style_text_align(lanes,LV_TEXT_ALIGN_CENTER,0);
+ lanes=Label(panel,158,218,180,&lv_font_montserrat_20);lv_obj_set_style_text_align(lanes,LV_TEXT_ALIGN_CENTER,0);
  mode_label=Label(panel,16,248,125,&lv_font_montserrat_20);
  alert_card=lv_obj_create(panel);lv_obj_remove_style_all(alert_card);lv_obj_set_pos(alert_card,350,10);lv_obj_set_size(alert_card,118,156);
  lv_obj_set_style_bg_color(alert_card,lv_color_hex(0x090b12),0);lv_obj_set_style_bg_opa(alert_card,LV_OPA_COVER,0);
