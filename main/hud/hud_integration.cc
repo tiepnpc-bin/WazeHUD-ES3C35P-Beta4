@@ -78,6 +78,23 @@ const char* AlertName(AlertKind k) {
  default: return "CANH BAO PHIA TRUOC";
  }
 }
+lv_color_t AlertColor(AlertKind k) {
+ switch(k) {
+ case AlertKind::SpeedCamera: case AlertKind::RedLightCamera:
+ case AlertKind::DistanceCamera: case AlertKind::PhoneCamera:
+ case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
+ case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
+ case AlertKind::StopSignCamera:
+  return lv_color_hex(0xff4040); // enforcement cameras / red-light warnings
+ case AlertKind::Police: return lv_color_hex(0x60b8ff);
+ case AlertKind::TrafficJam: return lv_color_hex(0xff8a30);
+ case AlertKind::Hazard: case AlertKind::Accident: case AlertKind::RoadClosed:
+ case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
+ case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
+  return lv_color_hex(0xffd040);
+ default: return lv_color_hex(0xffffff);
+ }
+}
 void FormatDistance(int meters, char* out, size_t n) {
  if(meters < 0) std::snprintf(out,n,"--");
  else if(meters < 1000) std::snprintf(out,n,"%d m",meters);
@@ -110,6 +127,10 @@ void Talk(lv_event_t*) {
 void Sound(lv_event_t*) {
  int mode=(sound_mode.load()+1)%3;sound_mode.store(mode);
  Settings cfg("hud_audio",true);cfg.SetInt("mode",mode);
+ // This is also a local speaker health check.  The former button only changed
+ // the stored mode, so a disconnected AI session looked exactly like a dead
+ // ES8311/amplifier.
+ if(mode!=static_cast<int>(AudioMode::Off))Application::GetInstance().PlaySound(Lang::Sounds::OGG_EXCLAMATION);
 }
 void Tick(lv_timer_t*) {
  auto s=HudStateStore::instance().snapshot();auto cfg=DeviceConfig::instance().snapshot();
@@ -158,6 +179,7 @@ void Tick(lv_timer_t*) {
   if(s.nearestAlert.kind!=AlertKind::None)std::snprintf(tmp,sizeof(tmp),"%s  %s",AlertName(s.nearestAlert.kind),d);
   else if(s.noPassingZone)std::snprintf(tmp,sizeof(tmp),"CAM VUOT");else tmp[0]=0;
   SetLabel(alert,tmp);
+  lv_obj_set_style_text_color(alert,AlertColor(s.nearestAlert.kind),0);
   SetLabel(street,cfg.showStreet?s.currentStreet.data():"");
   char lane_text[100]{};size_t used=0;
   for(unsigned i=0;i<s.laneCount && i<s.lanes.size() && used+8<sizeof(lane_text);++i)
@@ -170,6 +192,7 @@ void Tick(lv_timer_t*) {
  } else {
   SetLabel(speed,"--");SetLabel(limit,"");lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);SetLabel(turn,"CHO WAZEMOD");
   SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
+  lv_obj_set_style_text_color(alert,lv_color_white(),0);
   std::snprintf(tmp,sizeof(tmp),"HUD: CHUA CO DU LIEU");
  }
  SetLabel(mini,tmp);
@@ -201,6 +224,11 @@ esp_err_t StartHud() {
   Board::GetInstance().GetDisplay()->SetTheme(dark_theme);
  }
  if(!lvgl_port_lock(1000))return ESP_ERR_TIMEOUT;
+ // Rotate before creating the HUD layer.  Creating a 480x320 overlay while
+ // LVGL still has the native 320x480 geometry leaves the uncovered AI screen
+ // visible as a white strip until the first timer tick.
+ const auto initial_config=DeviceConfig::instance().snapshot();
+ lv_display_set_rotation(lv_display_get_default(),initial_config.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
  lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
  lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, 0);
  auto* layer=lv_layer_top();
