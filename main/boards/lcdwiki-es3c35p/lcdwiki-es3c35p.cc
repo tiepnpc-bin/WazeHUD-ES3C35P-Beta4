@@ -21,15 +21,11 @@
 
 #define TAG "LCDWikiES3C35P"
 
-// ---- Sitronix touch controller (I2C addr 0x55) ----
+// ---- Capacitive touch controller (I2C addr 0x55, FT-style reports) ----
 #define TOUCH_I2C_ADDR 0x55
-#define TOUCH_REG_REPORT 0x0010
+#define TOUCH_REG_INFO 0x0010
 #define TOUCH_REG_MAX_TOUCHES 0x0009
-// The controller reports a two-byte header followed by five-byte A-type
-// contacts.  It is not FT6336-compatible: treating the report as FT records
-// at 0x0014 made every point offset and caused taps to hit unrelated buttons.
-static constexpr size_t TOUCH_REPORT_HEADER_SIZE = 2;
-static constexpr size_t TOUCH_REPORT_CONTACT_SIZE = 5;
+#define TOUCH_REG_POINT0 0x0014
 
 static_assert(!DISPLAY_SWAP_XY, "ST77922 does not support swapping the X and Y axes");
 
@@ -47,10 +43,8 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
     static int64_t last_touch_log_us = 0;
     const auto rotation = lv_display_get_rotation(lv_display_get_default());
-    // Sitronix reports native portrait coordinates (320x480).  LVGL renders
-    // this panel in landscape by software rotation, so transform the native
-    // point once here.  The two landscape orientations are inverse mappings;
-    // do not apply a second LVGL-style rotation to an already logical point.
+    // The controller reports native portrait coordinates (320x480).  LVGL
+    // renders the panel in landscape, so transform native data exactly once.
     const auto set_point = [&] {
         if (rotation == LV_DISPLAY_ROTATION_270) {
             data->point.x = last_y;
@@ -65,18 +59,24 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
 
     if (touch_dev_handle == NULL)
         return;
-    uint8_t report[TOUCH_REPORT_HEADER_SIZE + TOUCH_REPORT_CONTACT_SIZE * 5]{};
-    if (touch_i2c_read(TOUCH_REG_REPORT, report,
-                       TOUCH_REPORT_HEADER_SIZE + TOUCH_REPORT_CONTACT_SIZE * touch_max_points) != ESP_OK)
+    uint8_t info;
+    if (touch_i2c_read(TOUCH_REG_INFO, &info, 1) != ESP_OK)
         return;
-    const uint8_t touch_count = report[0] & 0x0F;
-    for (uint8_t i = 0; i < touch_count && i < touch_max_points; ++i) {
-        const uint8_t* point = report + TOUCH_REPORT_HEADER_SIZE + i * TOUCH_REPORT_CONTACT_SIZE;
-        // Sitronix A-type: valid bit 7; x high bits 6:4; y high bits 2:0.
-        if ((point[0] & 0x80) == 0) continue;
-        const int16_t x = static_cast<int16_t>(((point[0] & 0x70) << 4) | point[1]);
-        const int16_t y = static_cast<int16_t>(((point[0] & 0x07) << 8) | point[2]);
-        if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT) continue;
+    if ((info & 0x08) == 0)
+        return;
+
+    uint8_t buf[7 * 5]{};
+    if (touch_i2c_read(TOUCH_REG_POINT0, buf, 7 * touch_max_points) != ESP_OK)
+        return;
+    for (uint8_t i = 0; i < touch_max_points; ++i) {
+        const uint8_t* point = buf + i * 7;
+        // FT-style reports: 00=down and 10=contact; 01=lift-up.
+        if ((point[0] & 0xC0) == 0x40)
+            continue;
+        const int16_t x = static_cast<int16_t>(((point[0] & 0x3F) << 8) | point[1]);
+        const int16_t y = static_cast<int16_t>(((point[2] & 0x3F) << 8) | point[3]);
+        if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT)
+            continue;
         last_x = x;
         last_y = y;
         set_point();
