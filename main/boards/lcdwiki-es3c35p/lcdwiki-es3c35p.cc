@@ -8,6 +8,8 @@
 #include "settings.h"
 #include "wifi_board.h"
 
+#include <wifi_manager.h>
+
 #include <driver/i2c_master.h>
 #include <driver/spi_common.h>
 #include <esp_lcd_panel_io.h>
@@ -355,7 +357,11 @@ private:
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
+            // With no saved credentials the board deliberately stays offline
+            // to avoid the SoftAP reset loop.  BOOT remains the explicit way
+            // to request Wi-Fi provisioning from that idle HUD state.
+            if (app.GetDeviceState() == kDeviceStateStarting ||
+                (app.GetDeviceState() == kDeviceStateIdle && !WifiManager::GetInstance().IsConnected())) {
                 EnterWifiConfigMode();
                 return;
             }

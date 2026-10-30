@@ -1,5 +1,6 @@
 #include "wifi_board.h"
 
+#include "sdkconfig.h"
 #include "display.h"
 #include "application.h"
 #include "system_info.h"
@@ -107,10 +108,22 @@ void WifiBoard::TryWifiConnect() {
         esp_timer_start_once(connect_timer_, CONNECT_TIMEOUT_SEC * 1000000ULL);
         WifiManager::GetInstance().StartStation();
     } else {
+#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
+        // On the ES3C35P this application already owns most of the internal
+        // SRAM for BLE, the QSPI display and audio.  Starting a SoftAP with no
+        // saved SSID makes the ESP-IDF Wi-Fi driver fail allocating its beacon
+        // buffer and panic.  Keep the HUD/BLE available offline rather than
+        // resetting forever; Wi-Fi provisioning remains an explicit action.
+        ESP_LOGW(TAG, "No WiFi credentials; keep ES3C35P offline to avoid SoftAP reset loop");
+        auto& app = Application::GetInstance();
+        app.SetDeviceState(kDeviceStateActivating);
+        app.SetDeviceState(kDeviceStateIdle);
+#else
         // No SSID configured, enter config mode
         // Wait for the board version to be shown
         vTaskDelay(pdMS_TO_TICKS(1500));
         StartWifiConfigMode();
+#endif
     }
 }
 
