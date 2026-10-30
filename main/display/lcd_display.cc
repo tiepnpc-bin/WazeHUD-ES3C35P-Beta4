@@ -79,7 +79,14 @@ LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_
 
     // Load theme from settings
     Settings settings("display", false);
+#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
+    // The HUD is used in a vehicle, where a bright Xiaozhi base screen is
+    // both distracting and can leak around a temporarily hidden HUD layer.
+    // Do not inherit a previously saved light theme on this board.
+    std::string theme_name = "dark";
+#else
     std::string theme_name = settings.GetString("theme", "light");
+#endif
     current_theme_ = LvglThemeManager::GetInstance().GetTheme(theme_name);
 
     // Create a timer to hide the preview image
@@ -1243,6 +1250,11 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // Set parent text color
     lv_obj_set_style_text_font(screen, text_font, 0);
     lv_obj_set_style_text_color(screen, lvgl_theme->text_color(), 0);
+    // The active screen is visible while the HUD overlay is intentionally
+    // hidden in AI mode.  Updating only container_ left the old white screen
+    // style exposed on some QSPI displays.
+    lv_obj_set_style_bg_color(screen, lvgl_theme->background_color(), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
     // Set background image
     if (lvgl_theme->background_image() != nullptr) {

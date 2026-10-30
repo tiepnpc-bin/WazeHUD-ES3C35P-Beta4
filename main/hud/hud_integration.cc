@@ -118,6 +118,20 @@ void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t 
  lv_obj_add_event_cb(btn,cb,LV_EVENT_CLICKED,nullptr);
  auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_center(text);
 }
+// Xiaozhi can apply its theme after the HUD has been created.  Repair the
+// opaque surfaces only when a theme actually changed them; rewriting these
+// styles on every timer tick invalidates the full QSPI frame and flickers.
+void EnsureDarkHudSurface() {
+ const auto ensure_black = [](lv_obj_t* object) {
+  if (lv_obj_get_style_bg_opa(object, 0) != LV_OPA_COVER)
+   lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
+  if (lv_color_to_u32(lv_obj_get_style_bg_color(object, 0)) !=
+      lv_color_to_u32(lv_color_black()))
+   lv_obj_set_style_bg_color(object, lv_color_black(), 0);
+ };
+ ensure_black(root);
+ ensure_black(panel);
+}
 void Toggle(lv_event_t*) { showing_hud=!showing_hud; }
 void Rotate(lv_event_t*) { DeviceConfig::instance().toggleRotation(); }
 void Talk(lv_event_t*) {
@@ -142,10 +156,14 @@ void Tick(lv_timer_t*) {
  // the ST77922.  Change visibility only when the user actually toggles mode.
  static bool applied_showing_hud = true;
  if (applied_showing_hud != showing_hud) {
-  if (showing_hud) lv_obj_remove_flag(root, LV_OBJ_FLAG_HIDDEN);
+  if (showing_hud) {
+   EnsureDarkHudSurface();
+   lv_obj_remove_flag(root, LV_OBJ_FLAG_HIDDEN);
+  }
   else lv_obj_add_flag(root, LV_OBJ_FLAG_HIDDEN);
   applied_showing_hud = showing_hud;
  }
+ EnsureDarkHudSurface();
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
@@ -239,6 +257,7 @@ esp_err_t StartHud() {
  lv_obj_set_style_bg_color(panel,lv_color_black(),0);lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
  lv_obj_set_style_border_width(panel,0,0);lv_obj_set_style_radius(panel,0,0);lv_obj_set_style_pad_all(panel,0,0);
  lv_obj_remove_flag(panel,LV_OBJ_FLAG_SCROLLABLE);
+ EnsureDarkHudSurface();
  link=Label(panel,12,4,330,&lv_font_montserrat_20);
  speed=Label(panel,20,42,180,&lv_font_montserrat_48);
  auto* unit=Label(panel,24,102,150,&lv_font_montserrat_20);SetLabel(unit,"km/h");
