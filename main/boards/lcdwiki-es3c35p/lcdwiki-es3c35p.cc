@@ -44,15 +44,12 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int64_t last_touch_log_us = 0;
     const auto rotation = lv_display_get_rotation(lv_display_get_default());
     // The controller reports native portrait coordinates (320x480).  LVGL
-    // renders the panel in landscape, so transform native data exactly once.
+    // transforms pointer input automatically when lv_display_set_rotation()
+    // is used, so pass the native coordinates through unchanged here.  Doing
+    // a second rotation here maps taps to a different UI control.
     const auto set_point = [&] {
-        if (rotation == LV_DISPLAY_ROTATION_270) {
-            data->point.x = last_y;
-            data->point.y = DISPLAY_WIDTH - 1 - last_x;
-        } else {
-            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
-            data->point.y = last_x;
-        }
+        data->point.x = last_x;
+        data->point.y = last_y;
     };
     set_point();
     data->state = LV_INDEV_STATE_RELEASED;
