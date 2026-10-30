@@ -123,9 +123,9 @@ void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t 
 // styles on every timer tick invalidates the full QSPI frame and flickers.
 void EnsureDarkHudSurface() {
  const auto ensure_black = [](lv_obj_t* object) {
-  if (lv_obj_get_style_bg_opa(object, 0) != LV_OPA_COVER)
+  if (lv_obj_get_style_bg_opa(object, LV_PART_MAIN) != LV_OPA_COVER)
    lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
-  if (lv_color_to_u32(lv_obj_get_style_bg_color(object, 0)) !=
+  if (lv_color_to_u32(lv_obj_get_style_bg_color(object, LV_PART_MAIN)) !=
       lv_color_to_u32(lv_color_black()))
    lv_obj_set_style_bg_color(object, lv_color_black(), 0);
  };
