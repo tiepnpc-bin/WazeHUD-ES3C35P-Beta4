@@ -1351,6 +1351,14 @@ void LcdDisplay::SetTheme(Theme* theme) {
     }
 #else
     // Simple UI mode - just update the main chat message
+    // content_ is created before HUD startup.  If that first pass used the
+    // persisted light theme, changing only screen/container leaves this large
+    // chat surface white in AI mode.
+    if (content_ != nullptr) {
+        lv_obj_set_style_bg_color(content_, lvgl_theme->chat_background_color(), 0);
+        lv_obj_set_style_bg_opa(content_, LV_OPA_COVER, 0);
+    }
+
     if (chat_message_label_ != nullptr) {
         lv_obj_set_style_text_color(chat_message_label_, lvgl_theme->text_color(), 0);
     }
