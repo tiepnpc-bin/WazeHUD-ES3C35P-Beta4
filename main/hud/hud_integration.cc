@@ -142,23 +142,30 @@ void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t 
 // styles on every timer tick invalidates the full QSPI frame and flickers.
 void EnsureDarkHudSurface() {
  const auto ensure_black = [](lv_obj_t* object) {
+  if (object == nullptr) return;
   if (lv_obj_get_style_bg_opa(object, LV_PART_MAIN) != LV_OPA_COVER)
    lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
   if (lv_color_to_u32(lv_obj_get_style_bg_color(object, LV_PART_MAIN)) !=
       lv_color_to_u32(lv_color_black()))
    lv_obj_set_style_bg_color(object, lv_color_black(), 0);
  };
+ // The base Xiaozhi screen remains visible whenever HUD is intentionally
+ // hidden.  Keep it dark as well: changing only the overlay made the AI
+ // transition reveal the generated light theme, which was mistaken for a
+ // backlight problem on the ES3C35P.
+ ensure_black(lv_screen_active());
  ensure_black(root);
  ensure_black(panel);
 }
 void Toggle(lv_event_t*) {
  showing_hud=!showing_hud;
 #if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
- // Provisioning is deliberately explicit on this memory-constrained board.
- // Entering AI mode is the user's request to expose the Xiaozhi AP; keeping
- // it out of the boot path prevents a Wi-Fi retry from flashing the HUD.
- if (!showing_hud)
-  static_cast<WifiBoard&>(Board::GetInstance()).EnterWifiConfigMode();
+ // Do not create a SoftAP from the live HUD.  On this board BLE, the QSPI
+ // renderer and the audio AFE leave too little contiguous internal RAM for
+ // ESP-IDF's SoftAP beacon buffer; the resulting allocation failure resets
+ // the CPU and disconnects WazeMod.  AI mode may use an already-connected
+ // station, while first-time provisioning must use the dedicated boot path.
+ // This button is therefore strictly a HUD/AI view switch.
 #endif
 }
 void Rotate(lv_event_t*) { DeviceConfig::instance().toggleRotation(); }
