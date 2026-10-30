@@ -19,11 +19,15 @@
 
 #define TAG "LCDWikiES3C35P"
 
-// ---- ST77922 touch controller (I2C addr 0x55, FT6336G-compatible) ----
+// ---- Sitronix touch controller (I2C addr 0x55) ----
 #define TOUCH_I2C_ADDR 0x55
-#define TOUCH_REG_INFO 0x0010
+#define TOUCH_REG_REPORT 0x0010
 #define TOUCH_REG_MAX_TOUCHES 0x0009
-#define TOUCH_REG_POINT0 0x0014
+// The controller reports a two-byte header followed by five-byte A-type
+// contacts.  It is not FT6336-compatible: treating the report as FT records
+// at 0x0014 made every point offset and caused taps to hit unrelated buttons.
+static constexpr size_t TOUCH_REPORT_HEADER_SIZE = 2;
+static constexpr size_t TOUCH_REPORT_CONTACT_SIZE = 5;
 
 static_assert(!DISPLAY_SWAP_XY, "ST77922 does not support swapping the X and Y axes");
 
@@ -41,19 +45,16 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
     static int16_t last_x = 0, last_y = 0;
     static int64_t last_touch_log_us = 0;
     const auto rotation = lv_display_get_rotation(lv_display_get_default());
-    // The touch IC reports its native 320x480 coordinates.  This panel is
-    // mounted with the touch axes already reversed relative to the LCD
-    // raster.  At the default landscape rotation an additional horizontal
-    // mirror therefore sends a physical top-left tap to the NÓI button at
-    // top-right.  When the user selects the opposite landscape orientation,
-    // both logical axes must be inverted.  Mirroring only Y left the top
-    // controls mapped into the lower HUD controls.
+    // Sitronix reports native portrait coordinates (320x480).  LVGL renders
+    // this panel in landscape by software rotation, so transform the native
+    // point once here.  The two landscape orientations are inverse mappings;
+    // do not apply a second LVGL-style rotation to an already logical point.
     const auto set_point = [&] {
         if (rotation == LV_DISPLAY_ROTATION_270) {
-            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
+            data->point.x = last_y;
             data->point.y = DISPLAY_WIDTH - 1 - last_x;
         } else {
-            data->point.x = last_y;
+            data->point.x = DISPLAY_HEIGHT - 1 - last_y;
             data->point.y = last_x;
         }
     };
@@ -62,40 +63,29 @@ static void touchpad_read(lv_indev_t*, lv_indev_data_t* data) {
 
     if (touch_dev_handle == NULL)
         return;
-    uint8_t info;
-    if (touch_i2c_read(TOUCH_REG_INFO, &info, 1) != ESP_OK)
+    uint8_t report[TOUCH_REPORT_HEADER_SIZE + TOUCH_REPORT_CONTACT_SIZE * 5]{};
+    if (touch_i2c_read(TOUCH_REG_REPORT, report,
+                       TOUCH_REPORT_HEADER_SIZE + TOUCH_REPORT_CONTACT_SIZE * touch_max_points) != ESP_OK)
         return;
-    if (info & 0x08) {
-        uint8_t buf[7 * 5];
-        if (touch_i2c_read(TOUCH_REG_POINT0, buf, 7 * touch_max_points) == ESP_OK) {
-            for (int i = 0; i < touch_max_points; i++) {
-                // FT-compatible controllers encode the event in bits 7:6:
-                // 00=press-down, 10=contact and 01=lift-up.  The previous
-                // bit-7-only test rejected every initial press, so LVGL
-                // never received a click unless the controller happened to
-                // emit a later contact frame.  Accept down/contact and only
-                // discard the explicit lift-up event.
-                if ((buf[i * 7] & 0xC0) != 0x40) {
-                    int16_t x = ((buf[i * 7] & 0x3F) << 8) | buf[i * 7 + 1];
-                    int16_t y = ((buf[i * 7 + 2] & 0x3F) << 8) | buf[i * 7 + 3];
-                    // A press must always refresh the pointer coordinate.
-                    // Keeping an old point for a small delta makes a later
-                    // tap activate the preceding button, which is far worse
-                    // than a few pixels of capacitive-controller jitter.
-                    last_x = x;
-                    last_y = y;
-                    set_point();
-                    data->state = LV_INDEV_STATE_PRESSED;
-                    const int64_t now_us = esp_timer_get_time();
-                    if (now_us - last_touch_log_us >= 500000) {
-                        ESP_LOGI(TAG, "Touch raw=(%d,%d) logical=(%d,%d) rotation=%d", x, y,
-                                 data->point.x, data->point.y, static_cast<int>(rotation));
-                        last_touch_log_us = now_us;
-                    }
-                    break;
-                }
-            }
+    const uint8_t touch_count = report[0] & 0x0F;
+    for (uint8_t i = 0; i < touch_count && i < touch_max_points; ++i) {
+        const uint8_t* point = report + TOUCH_REPORT_HEADER_SIZE + i * TOUCH_REPORT_CONTACT_SIZE;
+        // Sitronix A-type: valid bit 7; x high bits 6:4; y high bits 2:0.
+        if ((point[0] & 0x80) == 0) continue;
+        const int16_t x = static_cast<int16_t>(((point[0] & 0x70) << 4) | point[1]);
+        const int16_t y = static_cast<int16_t>(((point[0] & 0x07) << 8) | point[2]);
+        if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT) continue;
+        last_x = x;
+        last_y = y;
+        set_point();
+        data->state = LV_INDEV_STATE_PRESSED;
+        const int64_t now_us = esp_timer_get_time();
+        if (now_us - last_touch_log_us >= 500000) {
+            ESP_LOGI(TAG, "Touch raw=(%d,%d) logical=(%d,%d) rotation=%d", x, y,
+                     data->point.x, data->point.y, static_cast<int>(rotation));
+            last_touch_log_us = now_us;
         }
+        break;
     }
 }
 
