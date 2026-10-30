@@ -362,6 +362,14 @@ private:
             // to request Wi-Fi provisioning from that idle HUD state.
             if (app.GetDeviceState() == kDeviceStateStarting ||
                 (app.GetDeviceState() == kDeviceStateIdle && !WifiManager::GetInstance().IsConnected())) {
+                // The ESP-IDF SoftAP path still aborts on this board when BLE,
+                // audio and the QSPI HUD are resident.  Do not let an
+                // accidental BOOT press reintroduce the reset loop.  Wi-Fi
+                // provisioning stays disabled until that memory path is fixed.
+                if (!WifiManager::GetInstance().IsConnected()) {
+                    GetDisplay()->ShowNotification("Wi-Fi setup unavailable", 3000);
+                    return;
+                }
                 EnterWifiConfigMode();
                 return;
             }
