@@ -123,22 +123,71 @@ lv_color_t HudAccent(uint32_t rgb) {
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
  return lv_color_make(r, g, b);
 }
+bool IsWarningSign(AlertKind k);
+bool IsRegulatorySign(AlertKind k);
+bool IsDirectionSign(AlertKind k);
 lv_color_t AlertColor(AlertKind k) {
+ if (IsWarningSign(k) || IsRegulatorySign(k)) return lv_color_black();
  switch(k) {
  case AlertKind::SpeedCamera: case AlertKind::RedLightCamera:
  case AlertKind::DistanceCamera: case AlertKind::PhoneCamera:
  case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
  case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
  case AlertKind::StopSignCamera:
-  return HudAccent(0xff4040); // enforcement cameras / red-light warnings
- case AlertKind::Police: return HudAccent(0x60b8ff);
- case AlertKind::TrafficJam: return HudAccent(0xff8a30);
+  return lv_color_white(); // camera card: dark face, red border
+ case AlertKind::Police: return lv_color_white();
+ case AlertKind::TrafficJam: return lv_color_white();
  case AlertKind::Hazard: case AlertKind::Accident: case AlertKind::RoadClosed:
  case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
  case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
-  return HudAccent(0xffd040);
+  return lv_color_black(); // yellow warning face
  default: return lv_color_white();
  }
+}
+bool IsWarningSign(AlertKind k) {
+ switch (k) {
+ case AlertKind::Hazard: case AlertKind::Accident: case AlertKind::RoadClosed:
+ case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
+ case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
+ case AlertKind::Animal: case AlertKind::ObjectOnRoad: case AlertKind::Roadkill:
+ case AlertKind::Fog: case AlertKind::Hail: case AlertKind::Snow: case AlertKind::Ice:
+ case AlertKind::SpeedBump: case AlertKind::LanesMerging: case AlertKind::DangerousCurve:
+ case AlertKind::Fork: case AlertKind::Cyclist: case AlertKind::EmergencyVehicle:
+  return true;
+ default: return false;
+ }
+}
+bool IsRegulatorySign(AlertKind k) {
+ switch (k) {
+ case AlertKind::NoPassing: case AlertKind::NoCar: case AlertKind::NoMotorcycle:
+ case AlertKind::NoLeftTurn: case AlertKind::NoRightTurn: case AlertKind::NoUTurn:
+ case AlertKind::NoStraight: case AlertKind::ProhibitedRoad:
+ case AlertKind::CombinedTurnRestriction: case AlertKind::NoStraightAndRight:
+ case AlertKind::NoLeftAndUTurn: case AlertKind::NoStraightAndLeft:
+ case AlertKind::NoLeftAndRight: case AlertKind::CarNoLeftAndUTurn:
+ case AlertKind::CarNoRightAndUTurn: case AlertKind::NoRightAndUTurn:
+ case AlertKind::CarNoLeftTurn: case AlertKind::CarNoRightTurn:
+ case AlertKind::CarNoUTurn:
+  return true;
+ default: return false;
+ }
+}
+bool IsDirectionSign(AlertKind k) {
+ switch (k) {
+ case AlertKind::MandatoryStraight: case AlertKind::MandatoryRight:
+ case AlertKind::MandatoryLeft: case AlertKind::CarLane: case AlertKind::MotorcycleLane:
+ case AlertKind::OneWay: case AlertKind::ExpresswayExit: case AlertKind::ExpresswayRestStop:
+ case AlertKind::RestStop: case AlertKind::TollBooth:
+  return true;
+ default: return false;
+ }
+}
+lv_color_t AlertBackground(AlertKind k) {
+ if (IsWarningSign(k)) return HudAccent(0xffd740);       // warning: yellow face
+ if (IsRegulatorySign(k)) return lv_color_white();        // restriction: white face
+ if (IsDirectionSign(k)) return HudAccent(0x1267c5);      // direction: blue face
+ if (k == AlertKind::TrafficJam) return HudAccent(0xd84315);
+ return lv_color_black();                                 // camera/police: dark card
 }
 lv_color_t AlertBorderColor(AlertKind k) {
  switch(k) {
@@ -148,11 +197,11 @@ lv_color_t AlertBorderColor(AlertKind k) {
  case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
  case AlertKind::StopSignCamera: return HudAccent(0xe02020); // enforcement: red
  case AlertKind::Police: return HudAccent(0x318cff);          // information: blue
- case AlertKind::TrafficJam: case AlertKind::Hazard: case AlertKind::Accident:
- case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
- case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
-  return HudAccent(0xffc000);                                 // caution: yellow
- default: return HudAccent(0x318cff);
+ case AlertKind::TrafficJam: return HudAccent(0xd84315);
+ default:
+  if (IsWarningSign(k) || IsRegulatorySign(k)) return HudAccent(0xe02020); // red rim
+  if (IsDirectionSign(k)) return HudAccent(0x1267c5);
+  return HudAccent(0x318cff);
  }
 }
 void FormatDistance(int meters, char* out, size_t n) {
@@ -320,6 +369,9 @@ void Tick(lv_timer_t*) {
   SetLabel(alert_distance,tmp[0] != '\0' ? d : "");
   SetLabel(alert_icon,tmp[0] != '\0' ? "CAM" : "");
   lv_obj_set_style_text_color(alert,AlertColor(s.nearestAlert.kind),0);
+  lv_obj_set_style_text_color(alert_icon,AlertColor(s.nearestAlert.kind),0);
+  lv_obj_set_style_text_color(alert_distance,AlertColor(s.nearestAlert.kind),0);
+  lv_obj_set_style_bg_color(alert_card,AlertBackground(s.nearestAlert.kind),0);
   lv_obj_set_style_border_color(alert_card,AlertBorderColor(s.nearestAlert.kind),0);
   if (tmp[0] != '\0') lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
