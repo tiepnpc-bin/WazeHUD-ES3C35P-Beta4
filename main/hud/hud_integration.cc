@@ -121,16 +121,16 @@ lv_color_t HudAccent(uint32_t rgb) {
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
  return lv_color_make(r, g, b);
 }
-// The LCDWiki ST77922 panel wires the colour elements in BGR order even
-// though the verified control path must remain in RGB mode.  Convert only the
-// road-sign palette here.  This maps the requested red rim to the panel's red
-// element instead of the blue rim seen with a raw RGB value, without touching
-// the proven amber button palette.
+// The QSPI transfer has byte swapping enabled for sharp ST77922 glyphs. At
+// RGB565 depth that byte swap cycles the visible channels: input R -> visible
+// B, input G -> visible R, and input B -> visible G. Feed the inverse cycle
+// only to road-sign colours, so a requested red rim reaches the visible red
+// element without changing the verified amber control palette.
 lv_color_t RoadSignColor(uint32_t rgb) {
- const uint32_t panel_bgr = ((rgb & 0x0000ffU) << 16) |
-                            (rgb & 0x00ff00U) |
-                            ((rgb & 0xff0000U) >> 16);
- return lv_color_hex(panel_bgr);
+ const uint32_t transfer_rgb = ((rgb & 0x0000ffU) << 16) |
+                               ((rgb & 0xff0000U) >> 8) |
+                               ((rgb & 0x00ff00U) >> 8);
+ return lv_color_hex(transfer_rgb);
 }
 bool IsWarningSign(AlertKind k);
 bool IsRegulatorySign(AlertKind k);
@@ -344,6 +344,9 @@ void Tick(lv_timer_t*) {
   // Reapply the semantic card palette after a Xiaozhi theme transition.
   // Without this, the display theme can leave a camera card on a light face.
   applied_alert_kind=AlertKind::None;
+  // The AI theme can also overwrite the local speed-sign face.  Force the
+  // next valid HUD tick to restore its white face, black numeral and red rim.
+  speed_sign_visible=false;
   applied_theme=int(cfg.theme);
  }
   static int applied_rotation=-1;
