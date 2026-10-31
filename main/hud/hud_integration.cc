@@ -121,10 +121,17 @@ lv_color_t HudAccent(uint32_t rgb) {
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
  return lv_color_make(r, g, b);
 }
-// Use LVGL's native RGB colour path for road signs. The driver performs the
-// panel transfer conversion once; pre-swapping this palette causes red rims
-// to render purple while the established amber controls remain correct.
-lv_color_t RoadSignColor(uint32_t rgb) { return lv_color_hex(rgb); }
+// The LCDWiki ST77922 panel wires the colour elements in BGR order even
+// though the verified control path must remain in RGB mode.  Convert only the
+// road-sign palette here.  This maps the requested red rim to the panel's red
+// element instead of the blue rim seen with a raw RGB value, without touching
+// the proven amber button palette.
+lv_color_t RoadSignColor(uint32_t rgb) {
+ const uint32_t panel_bgr = ((rgb & 0x0000ffU) << 16) |
+                            (rgb & 0x00ff00U) |
+                            ((rgb & 0xff0000U) >> 16);
+ return lv_color_hex(panel_bgr);
+}
 bool IsWarningSign(AlertKind k);
 bool IsRegulatorySign(AlertKind k);
 bool IsDirectionSign(AlertKind k);
