@@ -218,7 +218,10 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    .swap_bytes = 1,
+                    // ST77922 accepts RGB565 bytes in the order supplied by
+                    // the QSPI panel IO.  Swapping a second time turns the
+                    // HUD's red signs cyan and blue controls yellow.
+                    .swap_bytes = 0,
                     .full_refresh = 0,
                     .direct_mode = 0,
                 },
