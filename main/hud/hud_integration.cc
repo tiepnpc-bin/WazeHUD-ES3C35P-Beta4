@@ -125,6 +125,21 @@ lv_color_t AlertColor(AlertKind k) {
  default: return lv_color_hex(0xffffff);
  }
 }
+lv_color_t AlertBorderColor(AlertKind k) {
+ switch(k) {
+ case AlertKind::SpeedCamera: case AlertKind::RedLightCamera:
+ case AlertKind::DistanceCamera: case AlertKind::PhoneCamera:
+ case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
+ case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
+ case AlertKind::StopSignCamera: return lv_color_hex(0xe02020); // enforcement: red
+ case AlertKind::Police: return lv_color_hex(0x318cff);          // information: blue
+ case AlertKind::TrafficJam: case AlertKind::Hazard: case AlertKind::Accident:
+ case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
+ case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
+  return lv_color_hex(0xffc000);                                 // caution: yellow
+ default: return lv_color_hex(0x318cff);
+ }
+}
 void FormatDistance(int meters, char* out, size_t n) {
  if(meters < 0) std::snprintf(out,n,"--");
  else if(meters < 1000) std::snprintf(out,n,"%d m",meters);
@@ -278,6 +293,7 @@ void Tick(lv_timer_t*) {
   SetLabel(alert_distance,tmp[0] != '\0' ? d : "");
   SetLabel(alert_icon,tmp[0] != '\0' ? "CAM" : "");
   lv_obj_set_style_text_color(alert,AlertColor(s.nearestAlert.kind),0);
+  lv_obj_set_style_border_color(alert_card,AlertBorderColor(s.nearestAlert.kind),0);
   if (tmp[0] != '\0') lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   SetLabel(street,cfg.showStreet?s.currentStreet.data():"");
@@ -373,7 +389,7 @@ esp_err_t StartHud() {
  // distance never clip each other on 480x320 displays.
  alert_icon=Label(alert_card,10,10,98,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_icon,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_icon,lv_color_white(),0);
  alert=Label(alert_card,7,50,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,58);lv_obj_set_style_text_color(alert,lv_color_hex(0xffd040),0);
- alert_distance=Label(alert_card,7,118,104,&lv_font_montserrat_32);lv_obj_set_style_text_align(alert_distance,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_distance,lv_color_white(),0);
+ alert_distance=Label(alert_card,7,118,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_distance,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_distance,lv_color_white(),0);
  lv_obj_add_flag(alert_card,LV_OBJ_FLAG_HIDDEN);
  mini=Label(root,8,4,235,&lv_font_montserrat_20);
  Button(root,"AM",248,0,45,Sound);Button(root,"AI",298,0,45,Toggle);Button(root,"NOI",348,0,58,Talk);Button(root,"XOAY",411,0,60,Rotate);
