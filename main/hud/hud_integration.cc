@@ -108,23 +108,23 @@ const char* AlertName(AlertKind k) {
  default: return "CANH BAO PHIA TRUOC";
  }
 }
-// The ST77922 panel transfer uses byte-swapped RGB565 to keep glyph edges
-// sharp.  Black and white survive that operation unchanged, but coloured
-// pixels do not.  The native panel is BGR, so exchange red/blue before the
-// byte preparation and the physical display receives the intended RGB hue.
+// The ST77922 transfer needs a byte-prepared RGB565 value for the legacy
+// controls. Keep this conversion exclusively for the already verified amber
+// buttons: applying it to every colour made the physical sign palette purple.
 lv_color_t HudAccent(uint32_t rgb) {
  const uint16_t intended = static_cast<uint16_t>(((rgb >> 8) & 0xf800) |
                                                   ((rgb >> 5) & 0x07e0) |
                                                   ((rgb >> 3) & 0x001f));
- const uint16_t bgr = static_cast<uint16_t>(((intended & 0x001f) << 11) |
-                                             (intended & 0x07e0) |
-                                             ((intended & 0xf800) >> 11));
- const uint16_t preswapped = static_cast<uint16_t>((bgr << 8) | (bgr >> 8));
+ const uint16_t preswapped = static_cast<uint16_t>((intended << 8) | (intended >> 8));
  const uint8_t r = static_cast<uint8_t>(((preswapped >> 11) & 0x1f) * 255 / 31);
  const uint8_t g = static_cast<uint8_t>(((preswapped >> 5) & 0x3f) * 255 / 63);
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
  return lv_color_make(r, g, b);
 }
+// Use LVGL's native RGB colour path for road signs. The driver performs the
+// panel transfer conversion once; pre-swapping this palette causes red rims
+// to render purple while the established amber controls remain correct.
+lv_color_t RoadSignColor(uint32_t rgb) { return lv_color_hex(rgb); }
 bool IsWarningSign(AlertKind k);
 bool IsRegulatorySign(AlertKind k);
 bool IsDirectionSign(AlertKind k);
@@ -188,10 +188,10 @@ lv_color_t AlertBackground(AlertKind k) {
  // Keep the face colours tied to the Vietnamese road-sign convention.  The
  // HUD has a rectangular alert card rather than a pictogram, but its colour
  // must still immediately convey the class of sign.
- if (IsWarningSign(k)) return HudAccent(0xffd740);        // warning: yellow face
+ if (IsWarningSign(k)) return RoadSignColor(0xffd740);    // warning: yellow face
  if (IsRegulatorySign(k)) return lv_color_white();        // prohibition: white face
- if (IsDirectionSign(k)) return HudAccent(0x1267c5);      // mandatory/direction: blue face
- if (k == AlertKind::TrafficJam) return HudAccent(0xd84315);
+ if (IsDirectionSign(k)) return RoadSignColor(0x1267c5);  // mandatory/direction: blue face
+ if (k == AlertKind::TrafficJam) return RoadSignColor(0xd84315);
  return lv_color_black();                                  // camera/police: dark face
 }
 lv_color_t AlertBorderColor(AlertKind k) {
@@ -200,13 +200,13 @@ lv_color_t AlertBorderColor(AlertKind k) {
  case AlertKind::DistanceCamera: case AlertKind::PhoneCamera:
  case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
  case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
- case AlertKind::StopSignCamera: return HudAccent(0xe02020); // enforcement: red
- case AlertKind::Police: return HudAccent(0x318cff);          // information: blue
- case AlertKind::TrafficJam: return HudAccent(0xd84315);
+ case AlertKind::StopSignCamera: return RoadSignColor(0xe02020); // enforcement: red
+ case AlertKind::Police: return RoadSignColor(0x318cff);          // information: blue
+ case AlertKind::TrafficJam: return RoadSignColor(0xd84315);
  default:
-  if (IsWarningSign(k) || IsRegulatorySign(k)) return HudAccent(0xe02020); // red rim
-  if (IsDirectionSign(k)) return HudAccent(0x1267c5);
-  return HudAccent(0x318cff);
+  if (IsWarningSign(k) || IsRegulatorySign(k)) return RoadSignColor(0xe02020); // red rim
+  if (IsDirectionSign(k)) return RoadSignColor(0x1267c5);
+  return RoadSignColor(0x318cff);
  }
 }
 void FormatDistance(int meters, char* out, size_t n) {
@@ -333,7 +333,7 @@ void Tick(lv_timer_t*) {
   const lv_color_t text=day?lv_color_hex(0x111827):lv_color_white();
   for(auto* object : {link,speed,turn,second_turn,distance,eta,street,lanes,mini,mode_label,unit_label})
    lv_obj_set_style_text_color(object,text,0);
-  lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);
+  lv_obj_set_style_bg_color(divider,RoadSignColor(0x2475d5),0);
   // Reapply the semantic card palette after a Xiaozhi theme transition.
   // Without this, the display theme can leave a camera card on a light face.
   applied_alert_kind=AlertKind::None;
@@ -359,7 +359,7 @@ void Tick(lv_timer_t*) {
    // invalidating the full QSPI frame on every 250 ms HUD update.
    lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
    lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);
-   lv_obj_set_style_border_color(speed_sign,HudAccent(0xe02020),0);
+   lv_obj_set_style_border_color(speed_sign,RoadSignColor(0xe02020),0);
    lv_obj_set_style_text_color(limit,lv_color_black(),0);
    lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);
    speed_sign_visible = true;
@@ -397,7 +397,9 @@ void Tick(lv_timer_t*) {
    lv_obj_set_style_text_color(alert_icon,alert_text,0);
    lv_obj_set_style_text_color(alert_distance,alert_text,0);
    lv_obj_set_style_bg_color(alert_card,AlertBackground(rendered_alert_kind),0);
+   lv_obj_set_style_bg_opa(alert_card,LV_OPA_COVER,0);
    lv_obj_set_style_border_color(alert_card,AlertBorderColor(rendered_alert_kind),0);
+   lv_obj_set_style_border_opa(alert_card,LV_OPA_COVER,0);
    applied_alert_kind = rendered_alert_kind;
   }
   if (tmp[0] != '\0') lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
@@ -476,12 +478,12 @@ esp_err_t StartHud() {
  // International/Vietnamese maximum-speed sign: white face, red circular
  // border and black numeral.  Local styles keep it independent of AI theme.
  lv_obj_set_style_radius(speed_sign,LV_RADIUS_CIRCLE,0);lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
- lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,HudAccent(0xE02020),0);
+ lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,RoadSignColor(0xE02020),0);
  lv_obj_set_style_border_width(speed_sign,10,0);lv_obj_set_style_pad_all(speed_sign,0,0);lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_SCROLLABLE);
  limit=Label(speed_sign,0,0,128,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);lv_obj_center(limit);
  divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,152,8);lv_obj_set_size(divider,2,246);
- lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
- nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,HudAccent(0x249bff),0);
+ lv_obj_set_style_bg_color(divider,RoadSignColor(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
+ nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,RoadSignColor(0x249bff),0);
  turn=Label(panel,160,55,178,&lv_font_montserrat_20);lv_obj_set_style_text_align(turn,LV_TEXT_ALIGN_CENTER,0);
  distance=Label(panel,160,80,178,&lv_font_montserrat_48);lv_obj_set_style_text_align(distance,LV_TEXT_ALIGN_CENTER,0);
  second_turn=Label(panel,160,134,178,&lv_font_montserrat_20);lv_obj_set_style_text_align(second_turn,LV_TEXT_ALIGN_CENTER,0);
@@ -493,11 +495,11 @@ esp_err_t StartHud() {
  mode_label=Label(panel,14,248,130,&lv_font_montserrat_20);
  alert_card=lv_obj_create(panel);lv_obj_remove_style_all(alert_card);lv_obj_set_pos(alert_card,344,8);lv_obj_set_size(alert_card,128,188);
  lv_obj_set_style_bg_color(alert_card,lv_color_hex(0x090b12),0);lv_obj_set_style_bg_opa(alert_card,LV_OPA_COVER,0);
- lv_obj_set_style_border_color(alert_card,HudAccent(0xe73030),0);lv_obj_set_style_border_width(alert_card,3,0);lv_obj_set_style_radius(alert_card,10,0);
+ lv_obj_set_style_border_color(alert_card,RoadSignColor(0xe73030),0);lv_obj_set_style_border_width(alert_card,3,0);lv_obj_set_style_radius(alert_card,10,0);
  // The alert card deliberately uses three labels so a camera name and its
  // distance never clip each other on 480x320 displays.
  alert_icon=Label(alert_card,10,10,108,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_icon,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_icon,lv_color_white(),0);
- alert=Label(alert_card,8,52,112,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,62);lv_obj_set_style_text_color(alert,HudAccent(0xffd040),0);
+ alert=Label(alert_card,8,52,112,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,62);lv_obj_set_style_text_color(alert,RoadSignColor(0xffd040),0);
  alert_distance=Label(alert_card,8,128,112,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_distance,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_distance,lv_color_white(),0);
  lv_obj_add_flag(alert_card,LV_OBJ_FLAG_HIDDEN);
  mini=Label(root,8,4,235,&lv_font_montserrat_20);

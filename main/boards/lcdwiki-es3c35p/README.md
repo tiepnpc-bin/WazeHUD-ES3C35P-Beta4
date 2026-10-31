@@ -118,7 +118,7 @@ idf.py build flash monitor
 | 配置项 | 值 | 原因 |
 |--------|-----|------|
 | `DISPLAY_WIDTH/HEIGHT` | 320×480 | 原生竖屏分辨率 |
-| `DISPLAY_RGB_ORDER` | BGR | Màu phần cứng ST77922; phải khớp với MADCTL `0x08` để viền đỏ không thành tím |
+| `DISPLAY_RGB_ORDER` | RGB | Đường truyền ES3C35P đã kiểm chứng; phải khớp với MADCTL `0x00` |
 | `SPI_DMA_CH_AUTO` + `max_transfer_sz` | 51KB | SPI 总线 DMA，缓冲在 SRAM 避免 PSRAM 中转 |
 | `buff_dma=1, buff_spiram=0` | SRAM DMA | SRAM 可直接 DMA 访问，无需中转缓冲 |
 | `buffer_size` | width×80 (51KB) | 部分刷新缓冲 |
