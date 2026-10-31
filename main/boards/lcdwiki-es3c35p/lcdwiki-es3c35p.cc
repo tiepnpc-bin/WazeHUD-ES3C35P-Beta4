@@ -218,11 +218,10 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    // Board-specific ST77922 RGB565 byte order (QSPI data bus). The
-                    // panel IO already supplies the byte order expected by
-                    // the controller. A second swap turns HUD red signs
-                    // cyan and blue controls yellow.
-                    .swap_bytes = 0,
+                    // The ST77922 QSPI transfer needs byte-swapped RGB565
+                    // pixels.  Keeping this preserves crisp text and stable
+                    // full-frame refreshes on the ES3C35P.
+                    .swap_bytes = 1,
                     .full_refresh = 0,
                     .direct_mode = 0,
                 },

@@ -108,6 +108,23 @@ const char* AlertName(AlertKind k) {
  default: return "CANH BAO PHIA TRUOC";
  }
 }
+// ST77922 needs byte-swapped RGB565 for reliable glyph rendering. Black and
+// white survive that swap unchanged; coloured road-HUD accents do not. Build
+// the inverse wire colour only for those accents, not for the global theme.
+lv_color_t HudAccent(uint32_t rgb) {
+#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
+ const uint16_t r5 = (rgb >> 19) & 0x1f;
+ const uint16_t g6 = (rgb >> 10) & 0x3f;
+ const uint16_t b5 = (rgb >> 3) & 0x1f;
+ const uint16_t wanted = static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
+ const uint16_t source = static_cast<uint16_t>((wanted << 8) | (wanted >> 8));
+ return lv_color_make(((source >> 11) & 0x1f) * 255 / 31,
+                      ((source >> 5) & 0x3f) * 255 / 63,
+                      (source & 0x1f) * 255 / 31);
+#else
+ return lv_color_hex(rgb);
+#endif
+}
 lv_color_t AlertColor(AlertKind k) {
  switch(k) {
  case AlertKind::SpeedCamera: case AlertKind::RedLightCamera:
@@ -115,14 +132,14 @@ lv_color_t AlertColor(AlertKind k) {
  case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
  case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
  case AlertKind::StopSignCamera:
-  return lv_color_hex(0xff4040); // enforcement cameras / red-light warnings
- case AlertKind::Police: return lv_color_hex(0x60b8ff);
- case AlertKind::TrafficJam: return lv_color_hex(0xff8a30);
+  return HudAccent(0xff4040); // enforcement cameras / red-light warnings
+ case AlertKind::Police: return HudAccent(0x60b8ff);
+ case AlertKind::TrafficJam: return HudAccent(0xff8a30);
  case AlertKind::Hazard: case AlertKind::Accident: case AlertKind::RoadClosed:
  case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
  case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
-  return lv_color_hex(0xffd040);
- default: return lv_color_hex(0xffffff);
+  return HudAccent(0xffd040);
+ default: return lv_color_white();
  }
 }
 lv_color_t AlertBorderColor(AlertKind k) {
@@ -131,13 +148,13 @@ lv_color_t AlertBorderColor(AlertKind k) {
  case AlertKind::DistanceCamera: case AlertKind::PhoneCamera:
  case AlertKind::SeatbeltCamera: case AlertKind::DummyCamera:
  case AlertKind::BusLaneCamera: case AlertKind::NoiseCamera:
- case AlertKind::StopSignCamera: return lv_color_hex(0xe02020); // enforcement: red
- case AlertKind::Police: return lv_color_hex(0x318cff);          // information: blue
+ case AlertKind::StopSignCamera: return HudAccent(0xe02020); // enforcement: red
+ case AlertKind::Police: return HudAccent(0x318cff);          // information: blue
  case AlertKind::TrafficJam: case AlertKind::Hazard: case AlertKind::Accident:
  case AlertKind::Construction: case AlertKind::Pothole: case AlertKind::Flood:
  case AlertKind::SlipperyRoad: case AlertKind::Railway: case AlertKind::SchoolZone:
-  return lv_color_hex(0xffc000);                                 // caution: yellow
- default: return lv_color_hex(0x318cff);
+  return HudAccent(0xffc000);                                 // caution: yellow
+ default: return HudAccent(0x318cff);
  }
 }
 void FormatDistance(int meters, char* out, size_t n) {
@@ -159,9 +176,9 @@ lv_obj_t* Label(lv_obj_t* parent,int x,int y,int w,const lv_font_t* font) {
 void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t cb) {
  auto* btn=lv_button_create(parent);lv_obj_set_pos(btn,x,y);lv_obj_set_size(btn,w,28);
  lv_obj_add_event_cb(btn,cb,LV_EVENT_CLICKED,nullptr);
- lv_obj_set_style_bg_color(btn,lv_color_hex(0x123b78),0);
+ lv_obj_set_style_bg_color(btn,HudAccent(0x123b78),0);
  lv_obj_set_style_bg_opa(btn,LV_OPA_COVER,0);
- lv_obj_set_style_border_color(btn,lv_color_hex(0x2d8cff),0);
+ lv_obj_set_style_border_color(btn,HudAccent(0x2d8cff),0);
  lv_obj_set_style_border_width(btn,1,0);
  auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_center(text);
 }
@@ -201,7 +218,17 @@ void Toggle(lv_event_t*) {
 }
 void Rotate(lv_event_t*) { DeviceConfig::instance().toggleRotation(); }
 void Theme(lv_event_t*) { DeviceConfig::instance().toggleTheme(); }
-void Demo(lv_event_t*) { demo_mode=!demo_mode; HudStateStore::instance().refresh(); }
+void Demo(lv_event_t*) {
+ demo_mode=!demo_mode;
+ HudStateStore::instance().refresh();
+ // Demo has no live Waze/BLE session. PlayHudWarning deliberately rejects
+ // non-live sessions, therefore the explicit local demo test plays the voice
+ // through the regular audio path.
+ if (demo_mode && sound_mode.load() == static_cast<int>(AudioMode::Voice)) {
+  const auto voice = HudVoice(static_cast<unsigned>(audio::Clip::SpeedCamera), 0);
+  if (!voice.empty()) Application::GetInstance().PlaySound(voice);
+ }
+}
 void Brightness(lv_event_t*) { DeviceConfig::instance().cycleBrightness(); }
 void Talk(lv_event_t*) {
  if(Now()<next_sound)return;
@@ -252,7 +279,7 @@ void Tick(lv_timer_t*) {
    lv_obj_set_style_text_color(object,text,0);
   lv_obj_set_style_text_color(alert_icon,text,0);
   lv_obj_set_style_text_color(alert_distance,text,0);
-  lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);
+  lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);
   lv_obj_set_style_bg_color(alert_card,day?lv_color_hex(0xffffff):lv_color_hex(0x090b12),0);
   applied_theme=int(cfg.theme);
  }
@@ -367,12 +394,12 @@ esp_err_t StartHud() {
  // International/Vietnamese maximum-speed sign: white face, red circular
  // border and black numeral.  Local styles keep it independent of AI theme.
  lv_obj_set_style_radius(speed_sign,LV_RADIUS_CIRCLE,0);lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
- lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,lv_color_hex(0xE02020),0);
+ lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,HudAccent(0xE02020),0);
  lv_obj_set_style_border_width(speed_sign,10,0);lv_obj_set_style_pad_all(speed_sign,0,0);lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_SCROLLABLE);
  limit=Label(speed_sign,0,29,112,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
  divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,148,8);lv_obj_set_size(divider,2,246);
- lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
- nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,lv_color_hex(0x249bff),0);
+ lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
+ nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,HudAccent(0x249bff),0);
  turn=Label(panel,162,55,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(turn,LV_TEXT_ALIGN_CENTER,0);
  distance=Label(panel,162,80,172,&lv_font_montserrat_48);lv_obj_set_style_text_align(distance,LV_TEXT_ALIGN_CENTER,0);
  second_turn=Label(panel,162,134,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(second_turn,LV_TEXT_ALIGN_CENTER,0);
@@ -384,11 +411,11 @@ esp_err_t StartHud() {
  mode_label=Label(panel,16,248,125,&lv_font_montserrat_20);
  alert_card=lv_obj_create(panel);lv_obj_remove_style_all(alert_card);lv_obj_set_pos(alert_card,350,10);lv_obj_set_size(alert_card,118,176);
  lv_obj_set_style_bg_color(alert_card,lv_color_hex(0x090b12),0);lv_obj_set_style_bg_opa(alert_card,LV_OPA_COVER,0);
- lv_obj_set_style_border_color(alert_card,lv_color_hex(0xe73030),0);lv_obj_set_style_border_width(alert_card,3,0);lv_obj_set_style_radius(alert_card,10,0);
+ lv_obj_set_style_border_color(alert_card,HudAccent(0xe73030),0);lv_obj_set_style_border_width(alert_card,3,0);lv_obj_set_style_radius(alert_card,10,0);
  // The alert card deliberately uses three labels so a camera name and its
  // distance never clip each other on 480x320 displays.
  alert_icon=Label(alert_card,10,10,98,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_icon,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_icon,lv_color_white(),0);
- alert=Label(alert_card,7,50,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,58);lv_obj_set_style_text_color(alert,lv_color_hex(0xffd040),0);
+ alert=Label(alert_card,7,50,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,58);lv_obj_set_style_text_color(alert,HudAccent(0xffd040),0);
  alert_distance=Label(alert_card,7,118,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_distance,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_distance,lv_color_white(),0);
  lv_obj_add_flag(alert_card,LV_OBJ_FLAG_HIDDEN);
  mini=Label(root,8,4,235,&lv_font_montserrat_20);
