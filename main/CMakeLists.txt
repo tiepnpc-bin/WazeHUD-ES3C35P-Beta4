@@ -1169,6 +1169,7 @@ if(CONFIG_WAZE_HUD_AI)
         "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/include"
         "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/services/gap/include"
         "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/services/gatt/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/include"
         "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/nimble_port/include"
         "${BT_COMPONENT_DIR}/host/nimble/nimble/porting/nimble/include"
         "${BT_COMPONENT_DIR}/porting/include"
