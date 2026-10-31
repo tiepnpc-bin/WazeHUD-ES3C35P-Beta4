@@ -1158,6 +1158,22 @@ idf_component_register(SRCS ${SOURCES}
                         ${MAIN_PRIV_REQUIRES_EXTRA}
                     )
 
+# ESP-IDF 6 keeps the NimBLE host and service headers private to the bt
+# component.  The Waze HLP GATT transport uses those public NimBLE APIs
+# directly, so expose the corresponding include roots only for HUD builds.
+# This is deliberately scoped to CONFIG_WAZE_HUD_AI; normal boards do not
+# need (or link against) the NimBLE host implementation.
+if(CONFIG_WAZE_HUD_AI)
+    idf_component_get_property(BT_COMPONENT_DIR bt COMPONENT_DIR)
+    target_include_directories(${COMPONENT_LIB} PRIVATE
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/services/gap/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/services/gatt/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble_port/include"
+        "${BT_COMPONENT_DIR}/porting/npl/freertos/include"
+    )
+endif()
+
 # Keep project-owned C++ on GNU C++23. ESP-IDF 6 may default to a newer
 # dialect; pin the baseline so main/ does not depend on it.
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
