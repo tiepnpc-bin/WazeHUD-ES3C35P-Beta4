@@ -28,7 +28,7 @@
 namespace waze_hud {
 namespace {
 lv_obj_t *root, *panel, *speed, *limit, *speed_sign, *turn, *second_turn, *distance, *eta, *alert, *street, *link, *mini,
-    *mode_label, *lanes, *alert_card, *nav_arrow, *unit_label, *divider;
+    *mode_label, *lanes, *alert_card, *alert_icon, *alert_distance, *nav_arrow, *unit_label, *divider;
 std::atomic<int> sound_mode{2};
 bool showing_hud = true;
 bool demo_mode = false;
@@ -131,12 +131,10 @@ void FormatDistance(int meters, char* out, size_t n) {
  else std::snprintf(out,n,"%.1f km",meters/1000.0);
 }
 void FormatLane(const LaneState& lane, char* out, size_t n) {
- // HLP carries the supported and selected maneuvers as bit masks. Keep the
- // complete mask visible instead of discarding it: the UI can therefore
- // distinguish lanes with different directions even when more than one
- // maneuver is allowed for the same lane.
- std::snprintf(out, n, "[%c:%02X]", lane.selectedMask ? '+' : '-',
-               static_cast<unsigned>(lane.directionMask));
+ // A compact forward-arrow representation stays legible at driving distance.
+ // The selected route lane has a star; raw bit masks are implementation
+ // details and should not occupy the road-facing HUD.
+ std::snprintf(out, n, lane.selectedMask ? "^*" : "^");
 }
 lv_obj_t* Label(lv_obj_t* parent,int x,int y,int w,const lv_font_t* font) {
  auto* obj=lv_label_create(parent);lv_obj_set_pos(obj,x,y);lv_obj_set_width(obj,w);
@@ -237,6 +235,8 @@ void Tick(lv_timer_t*) {
   const lv_color_t text=day?lv_color_hex(0x111827):lv_color_white();
   for(auto* object : {link,speed,turn,second_turn,distance,eta,street,lanes,mini,mode_label,unit_label})
    lv_obj_set_style_text_color(object,text,0);
+  lv_obj_set_style_text_color(alert_icon,text,0);
+  lv_obj_set_style_text_color(alert_distance,text,0);
   lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);
   lv_obj_set_style_bg_color(alert_card,day?lv_color_hex(0xffffff):lv_color_hex(0x090b12),0);
   applied_theme=int(cfg.theme);
@@ -272,9 +272,11 @@ void Tick(lv_timer_t*) {
   else tmp[0] = '\0';
   SetLabel(eta, tmp);
   FormatDistance(s.nearestAlert.distanceM,d,sizeof(d));
-  if(s.nearestAlert.kind!=AlertKind::None)std::snprintf(tmp,sizeof(tmp),"%s  %s",AlertName(s.nearestAlert.kind),d);
+  if(s.nearestAlert.kind!=AlertKind::None)std::snprintf(tmp,sizeof(tmp),"%s",AlertName(s.nearestAlert.kind));
   else if(s.noPassingZone)std::snprintf(tmp,sizeof(tmp),"CAM VUOT");else tmp[0]=0;
   SetLabel(alert,tmp);
+  SetLabel(alert_distance,tmp[0] != '\0' ? d : "");
+  SetLabel(alert_icon,tmp[0] != '\0' ? "CAM" : "");
   lv_obj_set_style_text_color(alert,AlertColor(s.nearestAlert.kind),0);
   if (tmp[0] != '\0') lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
@@ -289,7 +291,7 @@ void Tick(lv_timer_t*) {
   std::snprintf(tmp,sizeof(tmp),"%d km/h | %s",s.speedKmh,showing_demo?"DEMO":overspeedActive(s,cfg)?"CANH BAO":"WazeMod");
  } else {
   SetLabel(speed,"--");SetLabel(limit,"");lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);SetLabel(turn,"CHO WAZEMOD");
-  SetLabel(nav_arrow,"");SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
+  SetLabel(nav_arrow,"");SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(alert_icon,"");SetLabel(alert_distance,"");SetLabel(street,"");SetLabel(lanes,"");
   lv_obj_set_style_text_color(alert,day?lv_color_hex(0x111827):lv_color_white(),0);
   lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   std::snprintf(tmp,sizeof(tmp),"HUD: CHUA CO DU LIEU");
@@ -364,10 +366,14 @@ esp_err_t StartHud() {
  if(theme && theme->GetTextFont())lv_obj_set_style_text_font(street,theme->GetTextFont()->font(),0);
  lanes=Label(panel,158,218,180,&lv_font_montserrat_20);lv_obj_set_style_text_align(lanes,LV_TEXT_ALIGN_CENTER,0);
  mode_label=Label(panel,16,248,125,&lv_font_montserrat_20);
- alert_card=lv_obj_create(panel);lv_obj_remove_style_all(alert_card);lv_obj_set_pos(alert_card,350,10);lv_obj_set_size(alert_card,118,156);
+ alert_card=lv_obj_create(panel);lv_obj_remove_style_all(alert_card);lv_obj_set_pos(alert_card,350,10);lv_obj_set_size(alert_card,118,176);
  lv_obj_set_style_bg_color(alert_card,lv_color_hex(0x090b12),0);lv_obj_set_style_bg_opa(alert_card,LV_OPA_COVER,0);
  lv_obj_set_style_border_color(alert_card,lv_color_hex(0xe73030),0);lv_obj_set_style_border_width(alert_card,3,0);lv_obj_set_style_radius(alert_card,10,0);
- alert=Label(alert_card,8,18,102,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert,lv_color_hex(0xffd040),0);
+ // The alert card deliberately uses three labels so a camera name and its
+ // distance never clip each other on 480x320 displays.
+ alert_icon=Label(alert_card,10,10,98,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert_icon,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_icon,lv_color_white(),0);
+ alert=Label(alert_card,7,50,104,&lv_font_montserrat_20);lv_obj_set_style_text_align(alert,LV_TEXT_ALIGN_CENTER,0);lv_label_set_long_mode(alert,LV_LABEL_LONG_WRAP);lv_obj_set_height(alert,58);lv_obj_set_style_text_color(alert,lv_color_hex(0xffd040),0);
+ alert_distance=Label(alert_card,7,118,104,&lv_font_montserrat_32);lv_obj_set_style_text_align(alert_distance,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(alert_distance,lv_color_white(),0);
  lv_obj_add_flag(alert_card,LV_OBJ_FLAG_HIDDEN);
  mini=Label(root,8,4,235,&lv_font_montserrat_20);
  Button(root,"AM",248,0,45,Sound);Button(root,"AI",298,0,45,Toggle);Button(root,"NOI",348,0,58,Talk);Button(root,"XOAY",411,0,60,Rotate);
