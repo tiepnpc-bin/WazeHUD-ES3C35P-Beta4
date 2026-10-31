@@ -108,22 +108,10 @@ const char* AlertName(AlertKind k) {
  default: return "CANH BAO PHIA TRUOC";
  }
 }
-// ST77922 needs byte-swapped RGB565 for reliable glyph rendering. Black and
-// white survive that swap unchanged; coloured road-HUD accents do not. Build
-// the inverse wire colour only for those accents, not for the global theme.
+// The LCDWiki QSPI panel accepts normal RGB565 values. Keep colour selection
+// in LVGL space: compensating it again makes buttons and warning cards dark.
 lv_color_t HudAccent(uint32_t rgb) {
-#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
- const uint16_t r5 = (rgb >> 19) & 0x1f;
- const uint16_t g6 = (rgb >> 10) & 0x3f;
- const uint16_t b5 = (rgb >> 3) & 0x1f;
- const uint16_t wanted = static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
- const uint16_t source = static_cast<uint16_t>((wanted << 8) | (wanted >> 8));
- return lv_color_make(((source >> 11) & 0x1f) * 255 / 31,
-                      ((source >> 5) & 0x3f) * 255 / 63,
-                      (source & 0x1f) * 255 / 31);
-#else
  return lv_color_hex(rgb);
-#endif
 }
 lv_color_t AlertColor(AlertKind k) {
  switch(k) {

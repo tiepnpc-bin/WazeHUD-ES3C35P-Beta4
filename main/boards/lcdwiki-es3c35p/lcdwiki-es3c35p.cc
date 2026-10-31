@@ -218,10 +218,10 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    // The ST77922 QSPI transfer needs byte-swapped RGB565
-                    // pixels.  Keeping this preserves crisp text and stable
-                    // full-frame refreshes on the ES3C35P.
-                    .swap_bytes = 1,
+                    // The LCDWiki panel IO already presents RGB565 in the
+                    // controller byte order. Swapping a second time makes
+                    // the coloured controls dark/purple and damages glyphs.
+                    .swap_bytes = 0,
                     .full_refresh = 0,
                     .direct_mode = 0,
                 },
