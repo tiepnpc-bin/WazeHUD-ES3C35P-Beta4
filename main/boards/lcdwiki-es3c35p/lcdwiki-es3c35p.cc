@@ -218,10 +218,10 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    // The LCDWiki panel IO already presents RGB565 in the
-                    // controller byte order. Swapping a second time makes
-                    // the coloured controls dark/purple and damages glyphs.
-                    .swap_bytes = 0,
+                    // ST77922 QSPI requires RGB565 byte swapping on this
+                    // board.  Without it labels and button edges lose their
+                    // sharpness after full-frame updates.
+                    .swap_bytes = 1,
                     .full_refresh = 0,
                     .direct_mode = 0,
                 },

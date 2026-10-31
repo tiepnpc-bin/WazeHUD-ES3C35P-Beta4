@@ -164,11 +164,13 @@ lv_obj_t* Label(lv_obj_t* parent,int x,int y,int w,const lv_font_t* font) {
 void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t cb) {
  auto* btn=lv_button_create(parent);lv_obj_set_pos(btn,x,y);lv_obj_set_size(btn,w,28);
  lv_obj_add_event_cb(btn,cb,LV_EVENT_CLICKED,nullptr);
- lv_obj_set_style_bg_color(btn,HudAccent(0x123b78),0);
+ // Black and white are byte-order invariant, so touch controls remain
+ // readable while the ST77922 runs in its sharp RGB565 transfer mode.
+ lv_obj_set_style_bg_color(btn,lv_color_black(),0);
  lv_obj_set_style_bg_opa(btn,LV_OPA_COVER,0);
- lv_obj_set_style_border_color(btn,HudAccent(0x2d8cff),0);
+ lv_obj_set_style_border_color(btn,lv_color_white(),0);
  lv_obj_set_style_border_width(btn,1,0);
- auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_center(text);
+ auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_set_style_text_color(text,lv_color_white(),0);lv_obj_center(text);
 }
 // Xiaozhi can apply its theme after the HUD has been created.  Repair the
 // opaque surfaces only when a theme actually changed them; rewriting these
