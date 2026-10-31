@@ -39,10 +39,10 @@
 #define DISPLAY_MIRROR_X        false
 #define DISPLAY_MIRROR_Y        false
 #define DISPLAY_SWAP_XY         false
-// ST77922 uses BGR output mode; it must agree with MADCTL (0x36 = 0x08) in
-// the vendor initialization table.  A mismatch leaves white/black intact but
-// turns red traffic-sign borders purple.
-#define DISPLAY_RGB_ORDER       LCD_RGB_ELEMENT_ORDER_BGR
+// The vendor ST77922 initialization table uses RGB (MADCTL 0x36 = 0x00).
+// Keep this declaration aligned with the table; BGR turns the HUD controls
+// purple even when their LVGL RGB value is correct.
+#define DISPLAY_RGB_ORDER       LCD_RGB_ELEMENT_ORDER_RGB
 #define DISPLAY_INVERT_COLOR    false
 
 #define DISPLAY_OFFSET_X        0

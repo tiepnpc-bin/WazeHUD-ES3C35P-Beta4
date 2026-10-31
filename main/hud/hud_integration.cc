@@ -117,12 +117,7 @@ lv_color_t HudAccent(uint32_t rgb) {
  const uint16_t intended = static_cast<uint16_t>(((rgb >> 8) & 0xf800) |
                                                   ((rgb >> 5) & 0x07e0) |
                                                   ((rgb >> 3) & 0x001f));
- // ST77922 is configured in BGR mode (MADCTL.BGR).  Reverse red/blue before
- // byte preparation; the controller then restores the requested RGB colour.
- const uint16_t bgr = static_cast<uint16_t>(((intended & 0x001f) << 11) |
-                                             (intended & 0x07e0) |
-                                             ((intended & 0xf800) >> 11));
- const uint16_t preswapped = static_cast<uint16_t>((bgr << 8) | (bgr >> 8));
+ const uint16_t preswapped = static_cast<uint16_t>((intended << 8) | (intended >> 8));
  const uint8_t r = static_cast<uint8_t>(((preswapped >> 11) & 0x1f) * 255 / 31);
  const uint8_t g = static_cast<uint8_t>(((preswapped >> 5) & 0x3f) * 255 / 63);
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
@@ -350,6 +345,10 @@ void Tick(lv_timer_t*) {
   std::snprintf(tmp,sizeof(tmp),"%d",s.speedKmh);SetLabel(speed,tmp);
   if(s.speedLimitKmh>0) {
    std::snprintf(tmp,sizeof(tmp),"%d",s.speedLimitKmh);
+   // The AI theme is allowed to style its own widgets, never this regulatory
+   // sign.  Reassert its standard white face when live limit data arrives.
+   lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
+   lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);
    lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);
   } else {
    tmp[0]='\0';
