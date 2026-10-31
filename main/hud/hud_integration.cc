@@ -108,10 +108,20 @@ const char* AlertName(AlertKind k) {
  default: return "CANH BAO PHIA TRUOC";
  }
 }
-// The LCDWiki QSPI panel accepts normal RGB565 values. Keep colour selection
-// in LVGL space: compensating it again makes buttons and warning cards dark.
+// The ST77922 panel transfer uses byte-swapped RGB565 to keep glyph edges
+// sharp.  Black and white survive that operation unchanged, but coloured
+// pixels do not.  Convert every intended accent colour to its pre-swapped
+// RGB565 representation here, so the physical display shows the standard
+// traffic-sign colours rather than cyan/magenta/yellow substitutions.
 lv_color_t HudAccent(uint32_t rgb) {
- return lv_color_hex(rgb);
+ const uint16_t intended = static_cast<uint16_t>(((rgb >> 8) & 0xf800) |
+                                                  ((rgb >> 5) & 0x07e0) |
+                                                  ((rgb >> 3) & 0x001f));
+ const uint16_t preswapped = static_cast<uint16_t>((intended << 8) | (intended >> 8));
+ const uint8_t r = static_cast<uint8_t>(((preswapped >> 11) & 0x1f) * 255 / 31);
+ const uint8_t g = static_cast<uint8_t>(((preswapped >> 5) & 0x3f) * 255 / 63);
+ const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
+ return lv_color_make(r, g, b);
 }
 lv_color_t AlertColor(AlertKind k) {
  switch(k) {
@@ -164,11 +174,11 @@ lv_obj_t* Label(lv_obj_t* parent,int x,int y,int w,const lv_font_t* font) {
 void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t cb) {
  auto* btn=lv_button_create(parent);lv_obj_set_pos(btn,x,y);lv_obj_set_size(btn,w,28);
  lv_obj_add_event_cb(btn,cb,LV_EVENT_CLICKED,nullptr);
- // Black and white are byte-order invariant, so touch controls remain
- // readable while the ST77922 runs in its sharp RGB565 transfer mode.
- lv_obj_set_style_bg_color(btn,lv_color_black(),0);
+ // Muted amber is readable at night without the hard white button blocks.
+ // Use HudAccent so the desired colour survives ST77922 byte swapping.
+ lv_obj_set_style_bg_color(btn,HudAccent(0xb96518),0);
  lv_obj_set_style_bg_opa(btn,LV_OPA_COVER,0);
- lv_obj_set_style_border_color(btn,lv_color_white(),0);
+ lv_obj_set_style_border_color(btn,HudAccent(0xf0a34b),0);
  lv_obj_set_style_border_width(btn,1,0);
  auto* text=lv_label_create(btn);SetLabel(text,title);lv_obj_set_style_text_color(text,lv_color_white(),0);lv_obj_center(text);
 }
@@ -386,7 +396,7 @@ esp_err_t StartHud() {
  lv_obj_set_style_radius(speed_sign,LV_RADIUS_CIRCLE,0);lv_obj_set_style_bg_color(speed_sign,lv_color_white(),0);
  lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,HudAccent(0xE02020),0);
  lv_obj_set_style_border_width(speed_sign,10,0);lv_obj_set_style_pad_all(speed_sign,0,0);lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_SCROLLABLE);
- limit=Label(speed_sign,0,29,112,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
+ limit=Label(speed_sign,0,0,112,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);lv_obj_center(limit);
  divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,148,8);lv_obj_set_size(divider,2,246);
  lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
  nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,HudAccent(0x249bff),0);
