@@ -218,9 +218,10 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    // ST77922 accepts RGB565 bytes in the order supplied by
-                    // the QSPI panel IO.  Swapping a second time turns the
-                    // HUD's red signs cyan and blue controls yellow.
+                    // Board-specific ST77922 RGB565 byte order.  The QSPI
+                    // panel IO already supplies the byte order expected by
+                    // the controller. A second swap turns HUD red signs
+                    // cyan and blue controls yellow.
                     .swap_bytes = 0,
                     .full_refresh = 0,
                     .direct_mode = 0,
