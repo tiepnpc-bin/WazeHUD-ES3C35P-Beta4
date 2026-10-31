@@ -39,11 +39,10 @@
 #define DISPLAY_MIRROR_X        false
 #define DISPLAY_MIRROR_Y        false
 #define DISPLAY_SWAP_XY         false
-// The vendor ST77922 init table sets MADCTL to RGB (0x36 = 0x00).  Declaring
-// BGR here leaves black/white intact but maps traffic-sign red to purple and
-// route blue to the wrong hue.  RGB fixes colours without changing QSPI byte
-// swapping, rotation, touch coordinates, or glyph sharpness.
-#define DISPLAY_RGB_ORDER       LCD_RGB_ELEMENT_ORDER_RGB
+// ST77922 uses BGR output mode; it must agree with MADCTL (0x36 = 0x08) in
+// the vendor initialization table.  A mismatch leaves white/black intact but
+// turns red traffic-sign borders purple.
+#define DISPLAY_RGB_ORDER       LCD_RGB_ELEMENT_ORDER_BGR
 #define DISPLAY_INVERT_COLOR    false
 
 #define DISPLAY_OFFSET_X        0

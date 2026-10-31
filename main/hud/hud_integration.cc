@@ -117,7 +117,12 @@ lv_color_t HudAccent(uint32_t rgb) {
  const uint16_t intended = static_cast<uint16_t>(((rgb >> 8) & 0xf800) |
                                                   ((rgb >> 5) & 0x07e0) |
                                                   ((rgb >> 3) & 0x001f));
- const uint16_t preswapped = static_cast<uint16_t>((intended << 8) | (intended >> 8));
+ // ST77922 is configured in BGR mode (MADCTL.BGR).  Reverse red/blue before
+ // byte preparation; the controller then restores the requested RGB colour.
+ const uint16_t bgr = static_cast<uint16_t>(((intended & 0x001f) << 11) |
+                                             (intended & 0x07e0) |
+                                             ((intended & 0xf800) >> 11));
+ const uint16_t preswapped = static_cast<uint16_t>((bgr << 8) | (bgr >> 8));
  const uint8_t r = static_cast<uint8_t>(((preswapped >> 11) & 0x1f) * 255 / 31);
  const uint8_t g = static_cast<uint8_t>(((preswapped >> 5) & 0x3f) * 255 / 63);
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
