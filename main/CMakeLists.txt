@@ -1166,10 +1166,10 @@ idf_component_register(SRCS ${SOURCES}
 if(CONFIG_WAZE_HUD_AI)
     idf_component_get_property(BT_COMPONENT_DIR bt COMPONENT_DIR)
     target_include_directories(${COMPONENT_LIB} PRIVATE
-        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/include"
-        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/services/gap/include"
-        "${BT_COMPONENT_DIR}/host/nimble/nimble/host/services/gatt/include"
-        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble_port/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/services/gap/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/host/services/gatt/include"
+        "${BT_COMPONENT_DIR}/host/nimble/nimble/nimble/nimble_port/include"
         "${BT_COMPONENT_DIR}/porting/npl/freertos/include"
     )
 endif()
