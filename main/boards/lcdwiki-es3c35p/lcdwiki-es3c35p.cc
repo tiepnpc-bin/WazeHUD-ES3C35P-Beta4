@@ -219,10 +219,11 @@ private:
                     .buff_dma = 1,
                     .buff_spiram = 0,
                     .sw_rotate = 1,
-                    // ST77922 QSPI requires RGB565 byte swapping on this
-                    // board.  Without it labels and button edges lose their
-                    // sharpness after full-frame updates.
-                    .swap_bytes = 1,
+                    // The ST77922 panel IO transmits RGB565 in controller
+                    // byte order.  Do not swap here: a second swap changes
+                    // the 16-bit R/G/B fields themselves, which is why a
+                    // red speed-sign rim previously appeared purple or blue.
+                    .swap_bytes = 0,
                     .full_refresh = 0,
                     .direct_mode = 0,
                 },
