@@ -1033,7 +1033,17 @@ void Application::HandleStateChangedEvent() {
                     "neutral");  // Then set emotion (wechat mode checks child count)
             }
             audio_service_.EnableVoiceProcessing(false);
+#if CONFIG_BOARD_TYPE_LCDWIKI_ES3C35P
+            // The ES3C35P is used primarily as a vehicle HUD.  Leaving the
+            // S3 AFE/WakeNet pipeline running while idle keeps the mic/I2S
+            // path powered continuously, consumes the internal SRAM needed
+            // by BLE and makes the board unnecessarily warm.  Manual NÓI
+            // still starts voice processing after an AI network connection;
+            // only the always-on wake word is disabled on this board.
+            audio_service_.EnableWakeWordDetection(false);
+#else
             audio_service_.EnableWakeWordDetection(true);
+#endif
             break;
         case kDeviceStateConnecting:
             display->SetStatus(Lang::Strings::CONNECTING);
