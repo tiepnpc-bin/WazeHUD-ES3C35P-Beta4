@@ -110,14 +110,16 @@ const char* AlertName(AlertKind k) {
 }
 // The ST77922 panel transfer uses byte-swapped RGB565 to keep glyph edges
 // sharp.  Black and white survive that operation unchanged, but coloured
-// pixels do not.  Convert every intended accent colour to its pre-swapped
-// RGB565 representation here, so the physical display shows the standard
-// traffic-sign colours rather than cyan/magenta/yellow substitutions.
+// pixels do not.  The native panel is BGR, so exchange red/blue before the
+// byte preparation and the physical display receives the intended RGB hue.
 lv_color_t HudAccent(uint32_t rgb) {
  const uint16_t intended = static_cast<uint16_t>(((rgb >> 8) & 0xf800) |
                                                   ((rgb >> 5) & 0x07e0) |
                                                   ((rgb >> 3) & 0x001f));
- const uint16_t preswapped = static_cast<uint16_t>((intended << 8) | (intended >> 8));
+ const uint16_t bgr = static_cast<uint16_t>(((intended & 0x001f) << 11) |
+                                             (intended & 0x07e0) |
+                                             ((intended & 0xf800) >> 11));
+ const uint16_t preswapped = static_cast<uint16_t>((bgr << 8) | (bgr >> 8));
  const uint8_t r = static_cast<uint8_t>(((preswapped >> 11) & 0x1f) * 255 / 31);
  const uint8_t g = static_cast<uint8_t>(((preswapped >> 5) & 0x3f) * 255 / 63);
  const uint8_t b = static_cast<uint8_t>((preswapped & 0x1f) * 255 / 31);
@@ -332,6 +334,9 @@ void Tick(lv_timer_t*) {
   for(auto* object : {link,speed,turn,second_turn,distance,eta,street,lanes,mini,mode_label,unit_label})
    lv_obj_set_style_text_color(object,text,0);
   lv_obj_set_style_bg_color(divider,HudAccent(0x2475d5),0);
+  // Reapply the semantic card palette after a Xiaozhi theme transition.
+  // Without this, the display theme can leave a camera card on a light face.
+  applied_alert_kind=AlertKind::None;
   applied_theme=int(cfg.theme);
  }
   static int applied_rotation=-1;
