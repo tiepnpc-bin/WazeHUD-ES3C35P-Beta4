@@ -28,13 +28,28 @@
 namespace waze_hud {
 namespace {
 lv_obj_t *root, *panel, *speed, *limit, *speed_sign, *turn, *second_turn, *distance, *eta, *alert, *street, *link, *mini,
-    *mode_label, *lanes, *alert_card, *nav_arrow;
+    *mode_label, *lanes, *alert_card, *nav_arrow, *unit_label, *divider;
 std::atomic<int> sound_mode{2};
 bool showing_hud = true;
+bool demo_mode = false;
 audio::AlertAudioPolicy policy;
 uint64_t next_sound = 0;
 uint64_t Now() { return esp_timer_get_time()/1000; }
 bool Valid(const HudState& s) { return s.connected && s.hasProducerState && !s.signalStale; }
+bool IsDayTheme(const DeviceSettings& cfg) { return cfg.theme == UiTheme::Day; }
+HudState DemoState() {
+ HudState s{};
+ s.connected=true; s.hasProducerState=true; s.navigationActive=true;
+ s.speedKmh=52; s.speedLimitKmh=60; s.maneuver=Maneuver::Continue;
+ s.maneuverDistanceM=183; s.remainingMinutes=8;
+ std::snprintf(s.currentStreet.data(),s.currentStreet.size(),"BACH THANH PHONG - CHE DO XEM THU");
+ std::snprintf(s.nextStreet.data(),s.nextStreet.size(),"DUONG PHIA TRUOC");
+ std::snprintf(s.eta.data(),s.eta.size(),"17:32");
+ s.nearestAlert.kind=AlertKind::SpeedCamera; s.nearestAlert.distanceM=200;
+ s.laneCount=3;
+ s.lanes[0]={0x02,0x00}; s.lanes[1]={0x01,0x01}; s.lanes[2]={0x04,0x00};
+ return s;
+}
 void SetLabel(lv_obj_t* obj,const char* value) {
  if(std::strcmp(lv_label_get_text(obj),value)!=0)lv_label_set_text(obj,value);
 }
@@ -140,22 +155,25 @@ void Button(lv_obj_t* parent, const char* title,int x,int y,int w,lv_event_cb_t 
 // Xiaozhi can apply its theme after the HUD has been created.  Repair the
 // opaque surfaces only when a theme actually changed them; rewriting these
 // styles on every timer tick invalidates the full QSPI frame and flickers.
-void EnsureDarkHudSurface() {
- const auto ensure_black = [](lv_obj_t* object) {
+void EnsureHudSurface(bool day) {
+ const lv_color_t background = day ? lv_color_hex(0xf4f7fb) : lv_color_black();
+ const auto ensure_background = [background](lv_obj_t* object) {
   if (object == nullptr) return;
   if (lv_obj_get_style_bg_opa(object, LV_PART_MAIN) != LV_OPA_COVER)
    lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
   if (lv_color_to_u32(lv_obj_get_style_bg_color(object, LV_PART_MAIN)) !=
-      lv_color_to_u32(lv_color_black()))
-   lv_obj_set_style_bg_color(object, lv_color_black(), 0);
+      lv_color_to_u32(background))
+   lv_obj_set_style_bg_color(object, background, 0);
  };
  // The base Xiaozhi screen remains visible whenever HUD is intentionally
  // hidden.  Keep it dark as well: changing only the overlay made the AI
  // transition reveal the generated light theme, which was mistaken for a
  // backlight problem on the ES3C35P.
- ensure_black(lv_screen_active());
- ensure_black(root);
- ensure_black(panel);
+ // Keep the underlying Xiaozhi screen dark.  Only the opaque HUD overlay is
+ // switched to day colours; hiding it must never reveal a white AI frame.
+ if (!day) ensure_background(lv_screen_active());
+ ensure_background(root);
+ ensure_background(panel);
 }
 void Toggle(lv_event_t*) {
  showing_hud=!showing_hud;
@@ -169,6 +187,9 @@ void Toggle(lv_event_t*) {
 #endif
 }
 void Rotate(lv_event_t*) { DeviceConfig::instance().toggleRotation(); }
+void Theme(lv_event_t*) { DeviceConfig::instance().toggleTheme(); }
+void Demo(lv_event_t*) { demo_mode=!demo_mode; HudStateStore::instance().refresh(); }
+void Brightness(lv_event_t*) { DeviceConfig::instance().cycleBrightness(); }
 void Talk(lv_event_t*) {
  if(Now()<next_sound)return;
  Application::GetInstance().ToggleChatState();
@@ -191,7 +212,12 @@ void Sound(lv_event_t*) {
 void Tick(lv_timer_t*) {
  auto s=HudStateStore::instance().snapshot();auto cfg=DeviceConfig::instance().snapshot();
  cfg.audioMode=static_cast<AudioMode>(sound_mode.load());
- const bool valid=Valid(s);char tmp[192],d[24];
+ bool valid=Valid(s);
+ // DEMO is intentionally subordinate to live Waze data: as soon as WazeMod
+ // supplies a valid state, the real route and warnings always win.
+ const bool showing_demo=demo_mode && !valid;
+ if(showing_demo) { s=DemoState(); valid=true; }
+ const bool day=IsDayTheme(cfg); char tmp[192],d[24];
  // The HUD resides in LVGL's top layer, so it is already above the Xiaozhi
  // widgets.  Reordering it and rewriting full-screen styles every 250 ms
  // invalidated the complete QSPI framebuffer and was visible as flashing on
@@ -199,13 +225,22 @@ void Tick(lv_timer_t*) {
  static bool applied_showing_hud = true;
  if (applied_showing_hud != showing_hud) {
   if (showing_hud) {
-   EnsureDarkHudSurface();
+   EnsureHudSurface(day);
    lv_obj_remove_flag(root, LV_OBJ_FLAG_HIDDEN);
   }
   else lv_obj_add_flag(root, LV_OBJ_FLAG_HIDDEN);
   applied_showing_hud = showing_hud;
  }
- EnsureDarkHudSurface();
+ EnsureHudSurface(day);
+ static int applied_theme=-1;
+ if(applied_theme != int(cfg.theme)) {
+  const lv_color_t text=day?lv_color_hex(0x111827):lv_color_white();
+  for(auto* object : {link,speed,turn,second_turn,distance,eta,street,lanes,mini,mode_label,unit_label})
+   lv_obj_set_style_text_color(object,text,0);
+  lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);
+  lv_obj_set_style_bg_color(alert_card,day?lv_color_hex(0xffffff):lv_color_hex(0x090b12),0);
+  applied_theme=int(cfg.theme);
+ }
   static int applied_rotation=-1;
   if(applied_rotation!=int(cfg.rotateDisplay)){
    lv_display_set_rotation(lv_display_get_default(),cfg.rotateDisplay?LV_DISPLAY_ROTATION_270:LV_DISPLAY_ROTATION_90);
@@ -214,7 +249,7 @@ void Tick(lv_timer_t*) {
  static int applied_brightness=-1;
  if(applied_brightness!=cfg.brightness){Board::GetInstance().GetBacklight()->SetBrightness(cfg.brightness,false);applied_brightness=cfg.brightness;}
 
- SetLabel(link,!s.connected?"BLE: CHUA KET NOI":!valid?"BLE: CHO DU LIEU":"BLE: WAZEMOD");
+ SetLabel(link,showing_demo?"HUD: XEM THU":!s.connected?"BLE: CHUA KET NOI":!valid?"BLE: CHO DU LIEU":"BLE: WAZEMOD");
  if(valid) {
   std::snprintf(tmp,sizeof(tmp),"%d",s.speedKmh);SetLabel(speed,tmp);
   if(s.speedLimitKmh>0) {
@@ -227,7 +262,7 @@ void Tick(lv_timer_t*) {
    lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);
   }
   SetLabel(limit,tmp);
-  lv_obj_set_style_text_color(speed,lv_color_hex((s.speedLimitKmh>0 && s.speedKmh>s.speedLimitKmh)?0xff3030:0xffffff),0);
+  lv_obj_set_style_text_color(speed,lv_color_hex((s.speedLimitKmh>0 && s.speedKmh>s.speedLimitKmh)?0xff3030:(day?0x111827:0xffffff)),0);
   SetLabel(turn,s.navigationActive?TurnName(s.maneuver):"CHUA DAN DUONG");
   SetLabel(nav_arrow,s.navigationActive?TurnArrow(s.maneuver):"");
   SetLabel(second_turn, s.navigationActive && s.secondManeuver != Maneuver::None
@@ -251,11 +286,11 @@ void Tick(lv_timer_t*) {
     if(written<0)break;
     used+=std::min<size_t>(static_cast<size_t>(written),sizeof(lane_text)-used-1); }
   SetLabel(lanes,lane_text);
-  std::snprintf(tmp,sizeof(tmp),"%d km/h | %s",s.speedKmh,overspeedActive(s,cfg)?"CANH BAO":"WazeMod");
+  std::snprintf(tmp,sizeof(tmp),"%d km/h | %s",s.speedKmh,showing_demo?"DEMO":overspeedActive(s,cfg)?"CANH BAO":"WazeMod");
  } else {
   SetLabel(speed,"--");SetLabel(limit,"");lv_obj_add_flag(speed_sign,LV_OBJ_FLAG_HIDDEN);SetLabel(turn,"CHO WAZEMOD");
   SetLabel(nav_arrow,"");SetLabel(second_turn,"");SetLabel(distance,"");SetLabel(eta,"");SetLabel(alert,"");SetLabel(street,"");SetLabel(lanes,"");
-  lv_obj_set_style_text_color(alert,lv_color_white(),0);
+  lv_obj_set_style_text_color(alert,day?lv_color_hex(0x111827):lv_color_white(),0);
   lv_obj_add_flag(alert_card, LV_OBJ_FLAG_HIDDEN);
   std::snprintf(tmp,sizeof(tmp),"HUD: CHUA CO DU LIEU");
  }
@@ -303,13 +338,13 @@ esp_err_t StartHud() {
  lv_obj_set_style_bg_color(panel,lv_color_black(),0);lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
  lv_obj_set_style_border_width(panel,0,0);lv_obj_set_style_radius(panel,0,0);lv_obj_set_style_pad_all(panel,0,0);
  lv_obj_remove_flag(panel,LV_OBJ_FLAG_SCROLLABLE);
- EnsureDarkHudSurface();
+ EnsureHudSurface(false);
  // Dark 480x320 vehicle HUD: limit/speed on the left, navigation in the
  // center, and an alert card on the right.  The layout intentionally mirrors
  // a road HUD instead of the phone-chat screen used by Xiaozhi.
  link=Label(panel,10,2,140,&lv_font_montserrat_20);
  speed=Label(panel,22,128,120,&lv_font_montserrat_48);
- auto* unit=Label(panel,45,184,90,&lv_font_montserrat_20);SetLabel(unit,"km/h");
+ unit_label=Label(panel,45,184,90,&lv_font_montserrat_20);SetLabel(unit_label,"km/h");
  speed_sign=lv_obj_create(panel);lv_obj_remove_style_all(speed_sign);lv_obj_set_pos(speed_sign,18,12);lv_obj_set_size(speed_sign,112,112);
  // International/Vietnamese maximum-speed sign: white face, red circular
  // border and black numeral.  Local styles keep it independent of AI theme.
@@ -317,7 +352,7 @@ esp_err_t StartHud() {
  lv_obj_set_style_bg_opa(speed_sign,LV_OPA_COVER,0);lv_obj_set_style_border_color(speed_sign,lv_color_hex(0xE02020),0);
  lv_obj_set_style_border_width(speed_sign,10,0);lv_obj_set_style_pad_all(speed_sign,0,0);lv_obj_remove_flag(speed_sign,LV_OBJ_FLAG_SCROLLABLE);
  limit=Label(speed_sign,0,29,112,&lv_font_montserrat_48);lv_obj_set_style_text_align(limit,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(limit,lv_color_black(),0);
- auto* divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,148,8);lv_obj_set_size(divider,2,246);
+ divider=lv_obj_create(panel);lv_obj_remove_style_all(divider);lv_obj_set_pos(divider,148,8);lv_obj_set_size(divider,2,246);
  lv_obj_set_style_bg_color(divider,lv_color_hex(0x2475d5),0);lv_obj_set_style_bg_opa(divider,LV_OPA_COVER,0);
  nav_arrow=Label(panel,222,3,56,&lv_font_montserrat_48);lv_obj_set_style_text_align(nav_arrow,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(nav_arrow,lv_color_hex(0x249bff),0);
  turn=Label(panel,162,55,172,&lv_font_montserrat_20);lv_obj_set_style_text_align(turn,LV_TEXT_ALIGN_CENTER,0);
@@ -336,6 +371,7 @@ esp_err_t StartHud() {
  lv_obj_add_flag(alert_card,LV_OBJ_FLAG_HIDDEN);
  mini=Label(root,8,4,235,&lv_font_montserrat_20);
  Button(root,"AM",248,0,45,Sound);Button(root,"AI",298,0,45,Toggle);Button(root,"NOI",348,0,58,Talk);Button(root,"XOAY",411,0,60,Rotate);
+ Button(panel,"NEN",145,248,60,Theme);Button(panel,"DEMO",212,248,70,Demo);Button(panel,"SANG",289,248,55,Brightness);
  lv_timer_create(Tick,250,nullptr);
  lvgl_port_unlock();
  return ESP_OK;

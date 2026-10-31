@@ -182,6 +182,46 @@ esp_err_t DeviceConfig::toggleRotation() {
     return ESP_OK;
 }
 
+esp_err_t DeviceConfig::toggleTheme() {
+    DeviceSettings candidate = snapshot();
+    // Auto is deliberately rendered as night mode on the in-car HUD.  The
+    // local button then provides an explicit, persistent day/night choice
+    // without changing the WazeMod configuration protocol.
+    candidate.theme = candidate.theme == UiTheme::Day ? UiTheme::Night : UiTheme::Day;
+    ++candidate.revision;
+    const esp_err_t saved = saveSettings(candidate);
+    if (saved != ESP_OK) {
+        ESP_LOGE(kTag, "Button theme save failed: %s", esp_err_to_name(saved));
+        return saved;
+    }
+    taskENTER_CRITICAL(&lock_);
+    active_ = candidate;
+    taskEXIT_CRITICAL(&lock_);
+    ESP_LOGI(kTag, "HUD theme changed to %s, revision %lu",
+             candidate.theme == UiTheme::Day ? "day" : "night",
+             static_cast<unsigned long>(candidate.revision));
+    HudStateStore::instance().refresh();
+    return ESP_OK;
+}
+
+esp_err_t DeviceConfig::cycleBrightness() {
+    DeviceSettings candidate = snapshot();
+    candidate.brightness = candidate.brightness >= 100 ? 10 : candidate.brightness + 10;
+    ++candidate.revision;
+    const esp_err_t saved = saveSettings(candidate);
+    if (saved != ESP_OK) {
+        ESP_LOGE(kTag, "Button brightness save failed: %s", esp_err_to_name(saved));
+        return saved;
+    }
+    taskENTER_CRITICAL(&lock_);
+    active_ = candidate;
+    taskEXIT_CRITICAL(&lock_);
+    ESP_LOGI(kTag, "HUD brightness changed to %u%%, revision %lu", candidate.brightness,
+             static_cast<unsigned long>(candidate.revision));
+    HudStateStore::instance().refresh();
+    return ESP_OK;
+}
+
 void DeviceConfig::publishSchema(HlpSendLine send, void *context) {
     const DeviceSettings settings = snapshot();
     cJSON *root = envelope("cfg_begin");
